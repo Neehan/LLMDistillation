@@ -11,9 +11,11 @@ import utils
 from train import train
 
 
-model, tokenizer = utils.load_model_and_tokenizer(DATA_DIR + "llm_cache/models--microsoft--phi-1_5")
+model, tokenizer = utils.load_model_and_tokenizer(
+    DATA_DIR + "llm_cache/models--microsoft--phi-1_5"
+)
 
-logging.info("running a dummy prompt to test the model inference")
+# logging.info("running a dummy prompt to test the model inference")
 
 # inputs = tokenizer(
 #     '''def print_prime(n):
@@ -34,10 +36,10 @@ logging.info("running a dummy prompt to test the model inference")
 
 # Load the dataset
 train_encodings = utils.load_and_tokenize_dataset(
-    "wikitext", "train", tokenizer, "wikitext-2-raw-v1"
+    DATA_DIR + "datasets/wikitext", "train", tokenizer, "wikitext-2-raw-v1"
 )
 test_encodings = utils.load_and_tokenize_dataset(
-    "wikitext", "test", tokenizer, "wikitext-2-raw-v1"
+    DATA_DIR + "datasets/wikitext", "test", tokenizer, "wikitext-2-raw-v1"
 )
 
 

@@ -7,26 +7,29 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 def load_model_and_tokenizer(path):
-    logging.info(f"loading model {path}")
+    """
+    load models locally because the supercloud doesn't support locking
+    """
+    logging.info(f"loading model from {path}")
     model = AutoModelForCausalLM.from_pretrained(
         path,
         torch_dtype=torch.float32,
-        # trust_remote_code=True,
-        # cache_dir=DATA_DIR + "llm_cache/",
     ).to(DEVICE)
     logging.info(f"loading tokenizer for {path}")
     tokenizer = AutoTokenizer.from_pretrained(
-        path, trust_remote_code=True, # cache_dir=DATA_DIR + "llm_cache/"
+        path,
+        trust_remote_code=True,  # cache_dir=DATA_DIR + "llm_cache/"
     )
     return model, tokenizer
 
 
 def load_and_tokenize_dataset(path, split, tokenizer, dataset_name=None):
     """
-    path: path in HuggingFace
+    path: path locally, not in hf
     split: test, train etc
     dataset_name: some datasets have multiple versions, need to specify which
     """
+    logging.info(f"loading dataset from {path}.")
     if dataset_name is None:
         dataset = datasets.load_dataset(path, split=split)
     else:
