@@ -3,10 +3,6 @@ import torch.nn as nn
 from tqdm import tqdm
 import datasets
 from constants import *
-from filelock import SoftFileLock
-import filelock
-
-filelock.FileLock = SoftFileLock
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 

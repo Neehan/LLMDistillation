@@ -1,4 +1,8 @@
-import os
+from filelock import SoftFileLock
+import filelock
+
+filelock.FileLock = SoftFileLock
+
 import torch
 import logging
 
