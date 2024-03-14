@@ -4,16 +4,21 @@ from tqdm import tqdm
 import datasets
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from constants import *
+from filelock import SoftFileLock
+import filelock
+
+filelock.FileLock = SoftFileLock
 
 
 def load_model_and_tokenizer(path):
+    logging.info("loading model {path}")
     model = AutoModelForCausalLM.from_pretrained(
         path,
         torch_dtype=torch.float32,
         trust_remote_code=True,
         cache_dir=DATA_DIR + "llm_cache/",
     ).to(DEVICE)
-
+    logging.info(f"loading tokenizer for {path}")
     tokenizer = AutoTokenizer.from_pretrained(
         path, trust_remote_code=True, cache_dir=DATA_DIR + "llm_cache/"
     )
