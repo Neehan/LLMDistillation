@@ -31,9 +31,11 @@ def load_and_tokenize_dataset(path, split, tokenizer, dataset_name=None):
     """
     logging.info(f"loading dataset from {path}.")
     if dataset_name is None:
-        dataset = datasets.load_dataset(path, split=split)
+        dataset = datasets.load_dataset(path, split=split, keep_in_memory=True)
     else:
-        dataset = datasets.load_dataset(path, dataset_name, split=split)
+        dataset = datasets.load_dataset(
+            path, dataset_name, split=split, keep_in_memory=True
+        )
     logging.info(f"tokenizing {path} {split}.")
     encodings = tokenizer("\n\n".join(dataset["text"]), return_tensors="pt")
     return encodings
