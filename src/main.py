@@ -11,7 +11,7 @@ import utils
 from train import train
 
 
-model, tokenizer = utils.load_model_and_tokenizer("microsoft/phi-1_5")
+model, tokenizer = utils.load_model_and_tokenizer(DATA_DIR + "llm_cache/models--microsoft--phi-1_5")
 
 logging.info("running a dummy prompt to test the model inference")
 

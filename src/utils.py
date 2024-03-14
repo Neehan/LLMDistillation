@@ -11,12 +11,12 @@ def load_model_and_tokenizer(path):
     model = AutoModelForCausalLM.from_pretrained(
         path,
         torch_dtype=torch.float32,
-        trust_remote_code=True,
-        cache_dir=DATA_DIR + "llm_cache/",
+        # trust_remote_code=True,
+        # cache_dir=DATA_DIR + "llm_cache/",
     ).to(DEVICE)
     logging.info(f"loading tokenizer for {path}")
     tokenizer = AutoTokenizer.from_pretrained(
-        path, trust_remote_code=True, cache_dir=DATA_DIR + "llm_cache/"
+        path, trust_remote_code=True, # cache_dir=DATA_DIR + "llm_cache/"
     )
     return model, tokenizer
 
