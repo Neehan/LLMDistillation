@@ -4,6 +4,12 @@ import os
 import logging
 from tqdm_logger import TqdmToLogger
 
+from dotenv import load_dotenv
+import os
+
+# Automatically finds and loads the .env file
+load_dotenv()
+
 plt.style.use("ggplot")
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 torch.use_deterministic_algorithms(True)
@@ -16,6 +22,7 @@ STDOUT = os.environ.get("STDOUT", "False").lower() in ("true", "1", "t")
 
 if STDOUT:
     # Configure logging to output to stdout
+    print("output all logs to stdout")
     logging.basicConfig(
         level=logging.INFO,
         format="[%(asctime)s][%(levelname)s]: %(message)s",

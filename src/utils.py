@@ -2,16 +2,16 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 import datasets
-from transformers import AutoModelForCausalLM, AutoTokenizer
 from constants import *
 from filelock import SoftFileLock
 import filelock
 
 filelock.FileLock = SoftFileLock
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 def load_model_and_tokenizer(path):
-    logging.info("loading model {path}")
+    logging.info(f"loading model {path}")
     model = AutoModelForCausalLM.from_pretrained(
         path,
         torch_dtype=torch.float32,
