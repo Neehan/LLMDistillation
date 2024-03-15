@@ -26,7 +26,12 @@ IS_HALF_PRECISION = os.environ.get("HALF_PRECISION", "True").lower() in (
     "1",
     "t",
 )
-MODEL_PRECISION = torch.float16 if IS_HALF_PRECISION else torch.float32
+
+# half precision in pytorch is only implemented for cuda kernels
+
+MODEL_PRECISION = (
+    torch.float16 if IS_HALF_PRECISION and torch.cuda.is_available() else torch.float32
+)
 
 
 if STDOUT:

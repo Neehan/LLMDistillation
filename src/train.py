@@ -52,7 +52,8 @@ def train(teacher_model, token_encodings, layer_id=0, epochs=1, lr=0.0004):
         filter(lambda p: p.requires_grad, student_model.parameters()), lr=lr
     )
     loss_fn = nn.MSELoss()
-    scaler = GradScaler()  # Initialize the GradScaler for handling mixed precision
+    if torch.cuda.is_available():
+        scaler = GradScaler()  # Initialize the GradScaler for handling mixed precision
 
     input_ids = token_encodings.input_ids
     seqlen = 2048
@@ -64,14 +65,9 @@ def train(teacher_model, token_encodings, layer_id=0, epochs=1, lr=0.0004):
             desc=f"Epoch {epoch+1}/{epochs}",
             file=TQDM_OUTPUT,
             dynamic_ncols=True,
+            mininterval=5 * 60,  # seconds between two updates
         ):
             try:
-                if i > 1:
-                    # remove hooks to prevent memory leaks
-                    teacher_hook.remove()
-                    student_hook.remove()
-                    break
-
                 batch = input_ids[:, i * seqlen : (i + 1) * seqlen].to(device)
                 optimizer.zero_grad()
 
@@ -80,18 +76,27 @@ def train(teacher_model, token_encodings, layer_id=0, epochs=1, lr=0.0004):
                     teacher_model(input_ids=batch)
                     teacher_mlp_output = MLP_OUTPUT
 
-                # Use autocast for the forward pass to manage mixed precision
-                with autocast():
+                if torch.cuda.is_available():
+                    # Use autocast for the forward pass to manage mixed precision
+                    with autocast():
+                        student_model(input_ids=batch)
+                        student_mlp_output = MLP_OUTPUT
+                        loss = loss_fn(
+                            student_mlp_output.float(), teacher_mlp_output.float()
+                        )
+
+                    # Scale loss and backward
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
                     student_model(input_ids=batch)
                     student_mlp_output = MLP_OUTPUT
                     loss = loss_fn(
                         student_mlp_output.float(), teacher_mlp_output.float()
                     )
-
-                # Scale loss and backward
-                scaler.scale(loss).backward()
-                scaler.step(optimizer)  # Optimize
-                scaler.update()  # Update the scaler
+                    loss.backward()
+                    optimizer.step()
 
                 losses.append(loss.item())
 

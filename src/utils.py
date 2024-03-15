@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 from tqdm import tqdm
-import datasets
+
+# import datasets
 from constants import *
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import pandas as pd
@@ -53,7 +54,11 @@ def calculate_perplexity(model, encodings):
     nlls = []
 
     for i in tqdm(
-        range(nsamples), desc="evaluating...", file=TQDM_OUTPUT, dynamic_ncols=True
+        range(nsamples),
+        desc="evaluating...",
+        file=TQDM_OUTPUT,
+        dynamic_ncols=True,
+        mininterval=5 * 60,  # seconds between two updates
     ):
         batch = encodings[:, (i * model.seqlen) : ((i + 1) * model.seqlen)].to(
             model.device
