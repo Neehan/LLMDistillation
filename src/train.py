@@ -21,7 +21,7 @@ def train(teacher_model, token_encodings, layer_id=0, epochs=1, lr=0.0004):
     teacher_model.to(device)
     student_model = copy.deepcopy(teacher_model)
 
-    student_model = student_model.to(torch.float32)
+    student_model = student_model.to(MODEL_PRECISION)
     student_model.model.layers[layer_id].mlp = (
         nn.Sequential(
             nn.Linear(2048, 4096, bias=True),

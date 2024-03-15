@@ -20,6 +20,15 @@ DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # Read the STDOUT environment variable
 STDOUT = os.environ.get("STDOUT", "False").lower() in ("true", "1", "t")
 
+# Use half precision weights to save memory
+IS_HALF_PRECISION = os.environ.get("HALF_PRECISION", "True").lower() in (
+    "true",
+    "1",
+    "t",
+)
+MODEL_PRECISION = torch.float16 if IS_HALF_PRECISION else torch.float32
+
+
 if STDOUT:
     # Configure logging to output to stdout
     print("output all logs to stdout")

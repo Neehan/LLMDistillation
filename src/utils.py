@@ -14,7 +14,7 @@ def load_model_and_tokenizer(path):
     logging.info(f"loading model from {path}")
     model = AutoModelForCausalLM.from_pretrained(
         path,
-        torch_dtype=torch.float32,
+        torch_dtype=MODEL_PRECISION,
     ).to(DEVICE)
     logging.info(f"loading tokenizer for {path}")
     tokenizer = AutoTokenizer.from_pretrained(
