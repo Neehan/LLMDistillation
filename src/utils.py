@@ -4,6 +4,7 @@ from tqdm import tqdm
 import datasets
 from constants import *
 from transformers import AutoModelForCausalLM, AutoTokenizer
+import pandas as pd
 
 
 def load_model_and_tokenizer(path):
@@ -29,15 +30,18 @@ def load_and_tokenize_dataset(path, split, tokenizer, dataset_name=None):
     split: test, train etc
     dataset_name: some datasets have multiple versions, need to specify which
     """
-    logging.info(f"loading dataset from {path}.")
     if dataset_name is None:
-        dataset = datasets.load_dataset(path, split=split, keep_in_memory=True)
+        path = path + f"/{split}-00000-of-00001.parquet"
     else:
-        dataset = datasets.load_dataset(
-            path, dataset_name, split=split, keep_in_memory=True
-        )
-    logging.info(f"tokenizing {path} {split}.")
-    encodings = tokenizer("\n\n".join(dataset["text"]), return_tensors="pt")
+        path = path + "/" + dataset_name + f"/{split}-00000-of-00001.parquet"
+
+        # dataset = datasets.load_dataset(
+        #     path, dataset_name, split=split, keep_in_memory=True
+        # )
+    logging.info(f"loading dataset from {path}.")
+    dataset = pd.read_parquet(path)
+    logging.info(f"tokenizing {path}.")
+    encodings = tokenizer("\n\n".join(dataset["text"].tolist()), return_tensors="pt")
     return encodings
 
 
