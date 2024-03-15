@@ -65,7 +65,7 @@ def train(teacher_model, token_encodings, layer_id=0, epochs=1, lr=0.0004):
             desc=f"Epoch {epoch+1}/{epochs}",
             file=TQDM_OUTPUT,
             dynamic_ncols=True,
-            mininterval=5 * 60,  # seconds between two updates
+            mininterval=3 * 60,  # seconds between two updates
         ):
             try:
                 batch = input_ids[:, i * seqlen : (i + 1) * seqlen].to(device)
