@@ -42,22 +42,24 @@ def train(
     if trainable_attention:
         # Disable gradient updates for all parameters except for layer_id
         for name, param in student_model.named_parameters():
-            if f"model.layers.{layer_id}" not in name:
+            if (
+                f"model.layers.{layer_id}.mlp" not in name
+                and f"model.layers.{layer_id}.self_attn" not in name
+            ):
                 param.requires_grad = False
     else:
-        logging.info("mlp layer will be trained")
         # Disable gradient updates for all parameters except for the MLP
         for name, param in student_model.named_parameters():
             if f"model.layers.{layer_id}.mlp" not in name:
                 param.requires_grad = False
 
     # Register hooks to capture outputs from the teacher and student MLPs
-    teacher_hook = teacher_model.model.layers[layer_id].mlp.register_forward_hook(
-        extract_mlp_output_hook
-    )
-    student_hook = student_model.model.layers[layer_id].mlp.register_forward_hook(
-        extract_mlp_output_hook
-    )
+    teacher_hook = teacher_model.model.layers[
+        layer_id
+    ].resid_dropout.register_forward_hook(extract_mlp_output_hook)
+    student_hook = student_model.model.layers[
+        layer_id
+    ].resid_dropout.register_forward_hook(extract_mlp_output_hook)
 
     teacher_model.eval()
     student_model.train()
