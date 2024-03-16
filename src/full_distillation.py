@@ -13,7 +13,7 @@ from constants import *
 def train(teacher_model, token_encodings, epochs=1, lr=0.0004, temperature=1.1):
     device = teacher_model.device
     teacher_model.to(device)
-    student_model = copy.deepcopy(teacher_model).to(torch.float32)
+    student_model = copy.deepcopy(teacher_model)
     for layer_id in range(len(student_model.model.layers)):
         student_model.model.layers[layer_id].mlp = (
             nn.Sequential(
