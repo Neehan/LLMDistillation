@@ -83,7 +83,6 @@ def train(teacher_model, token_encodings, epochs=1, lr=0.0004, temperature=1.1):
                 optimizer.step()
 
             losses.append(loss.item())
-            print(loss)
         avg_loss = sum(losses) / len(losses)
         logging.info(f"Average Loss: {avg_loss}")
     return student_model
