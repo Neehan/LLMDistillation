@@ -55,7 +55,7 @@ def calculate_perplexity(model, encodings):
 
     for i in tqdm(
         range(nsamples),
-        desc="evaluating...",
+        desc="computing ppl...",
         file=TQDM_OUTPUT,
         dynamic_ncols=True,
         mininterval=5 * 60,  # seconds between two updates

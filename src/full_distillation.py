@@ -10,7 +10,16 @@ import utils
 from constants import *
 
 
-def train(teacher_model, token_encodings, epochs=1, lr=0.0004, temperature=1.1):
+def train(
+    teacher_model,
+    token_encodings,
+    epochs=1,
+    lr=0.0004,
+    temperature=1.1,
+    trainable_attention=False,
+    load_student_from_file=DATA_DIR
+    + "llm_cache/models--microsoft--phi-1_5_progressive_student.pth",
+):
     device = teacher_model.device
     student_model = copy.deepcopy(teacher_model)
     for layer_id in range(len(student_model.model.layers)):
@@ -20,13 +29,25 @@ def train(teacher_model, token_encodings, epochs=1, lr=0.0004, temperature=1.1):
                 nn.GELU(),
                 nn.Linear(4096, 2048, bias=True),
             )
+            .to(device)
+            .to(torch.float16)
         )
+
+    if load_student_from_file:
+        state_dict = torch.load(
+            load_student_from_file,
+            map_location=torch.device("cpu"),
+        )
+        student_model = student_model.cpu()
+        student_model.load_state_dict(state_dict)
+
     student_model = student_model.to(device).to(torch.float32)
 
     # Disable gradient updates for all parameters except for the MLP
-    for name, param in student_model.named_parameters():
-        if f"mlp" not in name:
-            param.requires_grad = False
+    if not trainable_attention:
+        for name, param in student_model.named_parameters():
+            if f"mlp" not in name:
+                param.requires_grad = False
 
     teacher_model.eval()
     student_model.train()
@@ -67,16 +88,29 @@ def train(teacher_model, token_encodings, epochs=1, lr=0.0004, temperature=1.1):
             losses.append(loss.item())
         avg_loss = sum(losses) / len(losses)
         logging.info(f"Average Loss: {avg_loss}")
+
+    # training is done
+    # have the student model same set of training params as teacher
+    # Assuming teacher_model and student_model are your model instances
+    for teacher_param, student_param in zip(
+        teacher_model.parameters(), student_model.parameters()
+    ):
+        student_param.requires_grad = teacher_param.requires_grad
     return student_model
 
 
-def main():
+def main(trainable_attention=False):
     """
     progressively distill a student model by distilling one MLP
     layer at a time and then using the resulting model as teacher
     """
     model_path = "llm_cache/models--microsoft--phi-1_5"
     teacher_model, tokenizer = utils.load_model_and_tokenizer(DATA_DIR + model_path)
+
+    if trainable_attention:
+        logging.info("attn and mlp layers will be trained.")
+    else:
+        logging.info("mlp layers will be trained.")
 
     # Load the dataset
     train_encodings = utils.load_and_tokenize_dataset(
@@ -89,9 +123,13 @@ def main():
     logging.info(f"Training student model")
     # student model's i-th layer's MLP has been shrunk and rest of the layers are identical to teacher model.
     # we can use this student model to train the next student model whose next layer will be shrunk
-    student_model = train(teacher_model, train_encodings, epochs=1, lr=0.0004).to(
-        MODEL_PRECISION
-    )
+    student_model = train(
+        teacher_model,
+        train_encodings,
+        epochs=1,
+        lr=0.0004,
+        trainable_attention=trainable_attention,
+    ).to(MODEL_PRECISION)
     # Save the model state dictionary
     torch.save(
         student_model,
