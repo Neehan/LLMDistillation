@@ -14,13 +14,13 @@ def load_model_and_tokenizer(path):
     """
     logging.info(f"loading model from {path}")
     model = AutoModelForCausalLM.from_pretrained(
-        path,
-        torch_dtype=MODEL_PRECISION,
+        path, torch_dtype=MODEL_PRECISION, local_files_only=True
     ).to(DEVICE)
     logging.info(f"loading tokenizer for {path}")
     tokenizer = AutoTokenizer.from_pretrained(
         path,
         trust_remote_code=True,  # cache_dir=DATA_DIR + "llm_cache/"
+        local_files_only=True,
     )
     return model, tokenizer
 
