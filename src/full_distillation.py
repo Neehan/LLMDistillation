@@ -11,9 +11,19 @@ from constants import *
 
 
 def train(teacher_model, token_encodings, epochs=1, lr=0.0004, temperature=1.1):
-    device = teacher_model.device
-    teacher_model.to(device)
+    # Initially, ensure the teacher model is on CPU to free up GPU memory
+    teacher_model.cpu()
     student_model = copy.deepcopy(teacher_model)
+    teacher_model.to(DEVICE)
+
+    # Check if we can use multiple GPUs
+    if torch.cuda.device_count() > 1:
+        print(f"Utilizing {torch.cuda.device_count()} GPUs!")
+        # Wrap the student model with DataParallel and move it to GPUs
+        student_model = nn.DataParallel(student_model).to(DEVICE)
+    else:
+        # Move the student model to the default GPU device
+        student_model.to(DEVICE)
     for layer_id in range(len(student_model.model.layers)):
         student_model.model.layers[layer_id].mlp = (
             nn.Sequential(
@@ -21,7 +31,7 @@ def train(teacher_model, token_encodings, epochs=1, lr=0.0004, temperature=1.1):
                 nn.GELU(),
                 nn.Linear(4096, 2048, bias=True),
             )
-            .to(device)
+            .to(student_model.device)
             .to(torch.float32)
         )
 
