@@ -6,4 +6,4 @@ module load anaconda/2023a
 #SBATCH --gres=gpu:volta:1
 
 # Run the script
-python src/main.py
+python src/main.py "$@"
