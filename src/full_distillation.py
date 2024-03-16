@@ -11,19 +11,8 @@ from constants import *
 
 
 def train(teacher_model, token_encodings, epochs=1, lr=0.0004, temperature=1.1):
-    # Initially, ensure the teacher model is on CPU to free up GPU memory
-    teacher_model.cpu()
+    device = teacher_model.device
     student_model = copy.deepcopy(teacher_model)
-    teacher_model.to(DEVICE)
-
-    # Check if we can use multiple GPUs
-    if torch.cuda.device_count() > 1:
-        print(f"Utilizing {torch.cuda.device_count()} GPUs!")
-        # Wrap the student model with DataParallel and move it to GPUs
-        student_model = nn.DataParallel(student_model).to(DEVICE)
-    else:
-        # Move the student model to the default GPU device
-        student_model.to(DEVICE)
     for layer_id in range(len(student_model.model.layers)):
         student_model.model.layers[layer_id].mlp = (
             nn.Sequential(
@@ -31,8 +20,8 @@ def train(teacher_model, token_encodings, epochs=1, lr=0.0004, temperature=1.1):
                 nn.GELU(),
                 nn.Linear(4096, 2048, bias=True),
             )
-            .to(student_model.device)
-            .to(torch.float32)
+            .to(device)
+            .to(MODEL_PRECISION)
         )
 
     # Disable gradient updates for all parameters except for the MLP
@@ -63,7 +52,11 @@ def train(teacher_model, token_encodings, epochs=1, lr=0.0004, temperature=1.1):
             dynamic_ncols=True,
             mininterval=3 * 60,  # seconds between two updates
         ):
-            batch = input_ids[:, i * seqlen : (i + 1) * seqlen].to(device)
+            batch = (
+                input_ids[:, i * seqlen : (i + 1) * seqlen]
+                .to(device)
+                .to(MODEL_PRECISION)
+            )
             optimizer.zero_grad()
 
             # Process the teacher model's output
