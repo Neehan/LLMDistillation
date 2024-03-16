@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --gres=gpu:volta:2
+#SBATCH --gres=gpu:volta:1
 
 # Loading the required module
 module load anaconda/2023a

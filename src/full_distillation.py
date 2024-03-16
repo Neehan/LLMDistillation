@@ -52,11 +52,7 @@ def train(teacher_model, token_encodings, epochs=1, lr=0.0004, temperature=1.1):
             dynamic_ncols=True,
             mininterval=3 * 60,  # seconds between two updates
         ):
-            batch = (
-                input_ids[:, i * seqlen : (i + 1) * seqlen]
-                .to(device)
-                .to(MODEL_PRECISION)
-            )
+            batch = input_ids[:, i * seqlen : (i + 1) * seqlen].to(device)
             optimizer.zero_grad()
 
             # Process the teacher model's output
@@ -72,11 +68,10 @@ def train(teacher_model, token_encodings, epochs=1, lr=0.0004, temperature=1.1):
                         student_model(input_ids=batch).logits / temperature, dim=-1
                     )
                     loss = loss_fn(student_log_probs, teacher_probs)
-
-                # Scale loss and backward
-                scaler.scale(loss).backward()
-                scaler.step(optimizer)
-                scaler.update()
+                    # Scale loss and backward
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
             else:
                 student_log_probs = F.log_softmax(
                     student_model(input_ids=batch).logits / temperature, dim=-1
