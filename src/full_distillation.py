@@ -13,7 +13,7 @@ from constants import *
 def train(teacher_model, token_encodings, epochs=1, lr=0.0004, temperature=1.1):
     device = teacher_model.device
     teacher_model.to(device)
-    student_model = copy.deepcopy(teacher_model)
+    student_model = copy.deepcopy(teacher_model).to(torch.float32)
     for layer_id in range(len(student_model.model.layers)):
         student_model.model.layers[layer_id].mlp = (
             nn.Sequential(
@@ -22,7 +22,7 @@ def train(teacher_model, token_encodings, epochs=1, lr=0.0004, temperature=1.1):
                 nn.Linear(4096, 2048, bias=True),
             )
             .to(device)
-            .to(MODEL_PRECISION)
+            .to(torch.float32)
         )
 
     # Disable gradient updates for all parameters except for the MLP
