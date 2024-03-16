@@ -20,9 +20,8 @@ def train(teacher_model, token_encodings, epochs=1, lr=0.0004, temperature=1.1):
                 nn.GELU(),
                 nn.Linear(4096, 2048, bias=True),
             )
-            .to(device)
-            .to(MODEL_PRECISION)
         )
+    student_model = student_model.to(device).to(torch.float32)
 
     # Disable gradient updates for all parameters except for the MLP
     for name, param in student_model.named_parameters():
@@ -37,9 +36,6 @@ def train(teacher_model, token_encodings, epochs=1, lr=0.0004, temperature=1.1):
     )
 
     loss_fn = torch.nn.KLDivLoss(reduction="batchmean")
-    if torch.cuda.is_available():
-        scaler = GradScaler()  # Initialize the GradScaler for handling mixed precision
-
     input_ids = token_encodings.input_ids
     seqlen = 2048
     nsamples = input_ids.size(1) // seqlen  # Adjust based on actual shape
@@ -62,24 +58,12 @@ def train(teacher_model, token_encodings, epochs=1, lr=0.0004, temperature=1.1):
                 )
 
             if torch.cuda.is_available():
-                # Use autocast for the forward pass to manage mixed precision
-                with autocast():
-                    student_log_probs = F.log_softmax(
-                        student_model(input_ids=batch).logits / temperature, dim=-1
-                    )
-                    loss = loss_fn(student_log_probs, teacher_probs)
-                    # Scale loss and backward
-                    scaler.scale(loss).backward()
-                    scaler.step(optimizer)
-                    scaler.update()
-            else:
                 student_log_probs = F.log_softmax(
                     student_model(input_ids=batch).logits / temperature, dim=-1
                 )
-                loss = loss_fn(student_log_probs, teacher_probs)
+                loss = loss_fn(student_log_probs, teacher_probs.to(torch.float32))
                 loss.backward()
                 optimizer.step()
-
             losses.append(loss.item())
         avg_loss = sum(losses) / len(losses)
         logging.info(f"Average Loss: {avg_loss}")
