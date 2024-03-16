@@ -27,11 +27,17 @@ def train(
     trainable_attention=False,
 ):
     device = teacher_model.device
+    teacher_model = teacher_model.to(MODEL_PRECISION)
+
     student_model = copy.deepcopy(teacher_model)
-    student_model.model.layers[layer_id].mlp = nn.Sequential(
-        nn.Linear(2048, 4096, bias=True),
-        nn.GELU(),
-        nn.Linear(4096, 2048, bias=True),
+    student_model.model.layers[layer_id].mlp = (
+        nn.Sequential(
+            nn.Linear(2048, 4096, bias=True),
+            nn.GELU(),
+            nn.Linear(4096, 2048, bias=True),
+        )
+        .to(device)
+        .to(torch.float32)
     )
     if trainable_attention:
         # Disable gradient updates for all parameters except for layer_id
@@ -45,7 +51,6 @@ def train(
             if f"model.layers.{layer_id}.mlp" not in name:
                 param.requires_grad = False
 
-    student_model = student_model.to(device).to(torch.float32)
     # Register hooks to capture outputs from the teacher and student MLPs
     teacher_hook = teacher_model.model.layers[layer_id].mlp.register_forward_hook(
         extract_mlp_output_hook
@@ -115,6 +120,7 @@ def train(
                 # remove hooks to prevent memory leaks
                 teacher_hook.remove()
                 student_hook.remove()
+                raise e
 
         avg_loss = sum(losses) / len(losses)
         logging.info(f"Average Loss: {avg_loss}")
