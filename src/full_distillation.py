@@ -96,6 +96,10 @@ def train(
         teacher_model.parameters(), student_model.parameters()
     ):
         student_param.requires_grad = teacher_param.requires_grad
+
+    # reduce precision to save memory
+    student_model = student_model.to(device).to(torch.float32)
+
     return student_model
 
 
