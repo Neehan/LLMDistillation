@@ -21,25 +21,25 @@ def train(
     + "llm_cache/models--microsoft--phi-1_5_progressive_student.pth",
 ):
     device = teacher_model.device
-    student_model = copy.deepcopy(teacher_model)
-    for layer_id in range(len(student_model.model.layers)):
-        student_model.model.layers[layer_id].mlp = (
-            nn.Sequential(
-                nn.Linear(2048, 4096, bias=True),
-                nn.GELU(),
-                nn.Linear(4096, 2048, bias=True),
+    teacher_model = teacher_model.to(torch.float16)
+    if load_student_from_file is None:
+        student_model = copy.deepcopy(teacher_model)
+        for layer_id in range(len(student_model.model.layers)):
+            student_model.model.layers[layer_id].mlp = (
+                nn.Sequential(
+                    nn.Linear(2048, 4096, bias=True),
+                    nn.GELU(),
+                    nn.Linear(4096, 2048, bias=True),
+                )
+                .to(device)
+                .to(torch.float16)
             )
-            .to(device)
-            .to(torch.float16)
-        )
 
-    if load_student_from_file:
-        state_dict = torch.load(
+    else:
+        student_model = torch.load(
             load_student_from_file,
             map_location=torch.device("cpu"),
         )
-        student_model = student_model.cpu()
-        student_model.load_state_dict(state_dict)
 
     student_model = student_model.to(device).to(torch.float32)
 
@@ -98,7 +98,7 @@ def train(
         student_param.requires_grad = teacher_param.requires_grad
 
     # reduce precision to save memory
-    student_model = student_model.to(device).to(torch.float32)
+    student_model = student_model.to(device).to(torch.float16)
 
     return student_model
 

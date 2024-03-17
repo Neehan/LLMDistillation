@@ -40,6 +40,13 @@ def train(
         .to(torch.float32)
     )
     if trainable_attention:
+        student_model.model.layers[layer_id].self_attn = student_model.model.layers[
+            layer_id
+        ].self_attn.to(torch.float32)
+
+        # saves memory by forgetting activations during forward pass
+        student_model.gradient_checkpointing_enable()
+
         # Disable gradient updates for all parameters except for layer_id
         for name, param in student_model.named_parameters():
             if (
