@@ -260,7 +260,7 @@ def main(trainable_attention=False):
         # Save the model state dictionary
         torch.save(
             student_model,
-            DATA_DIR + model_path + "_progressive_student.pth",
+            DATA_DIR + model_path + "_matryoshka_student.pth",
         )
         ppl = utils.calculate_perplexity(student_model, test_encodings)
         logging.info(f"Student model {i} ppl: {ppl:.3f}")

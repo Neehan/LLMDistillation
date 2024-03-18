@@ -9,6 +9,20 @@ import logging
 import utils
 from constants import *
 
+# Assume MLP_OUTPUT is a global variable for capturing outputs
+MLP_OUTPUT = [0 for _ in range(24)]
+
+
+def create_mlp_output_hook(layer_id):
+    """
+    create a hook function to capture MLP layer output
+    """
+
+    def extract_mlp_output_hook(module, input, output):
+        MLP_OUTPUT[layer_id] = output
+
+    return extract_mlp_output_hook
+
 
 def train(
     teacher_model,
@@ -21,18 +35,14 @@ def train(
     + "llm_cache/models--microsoft--phi-1_5_matryoshka_student.pth",
 ):
     device = teacher_model.device
-    teacher_model = teacher_model.to(torch.float16)
+    teacher_model = teacher_model.to(MODEL_PRECISION)
     if load_student_from_file is None:
         student_model = copy.deepcopy(teacher_model)
         for layer_id in range(len(student_model.model.layers)):
-            student_model.model.layers[layer_id].mlp = (
-                nn.Sequential(
-                    nn.Linear(2048, 4096, bias=True),
-                    nn.GELU(),
-                    nn.Linear(4096, 2048, bias=True),
-                )
-                .to(device)
-                .to(torch.float16)
+            student_model.model.layers[layer_id].mlp = nn.Sequential(
+                nn.Linear(2048, 4096, bias=True),
+                nn.GELU(),
+                nn.Linear(4096, 2048, bias=True),
             )
 
     else:
@@ -49,6 +59,22 @@ def train(
             if f"mlp" not in name:
                 param.requires_grad = False
 
+    # Register hooks to capture outputs from the teacher and student MLPs
+    teacher_hooks = []
+    student_hooks = []
+
+    # create hooks to capture all outputs from the mlp layers
+    for layer_id in range(24):
+        teacher_hook = teacher_model.model.layers[
+            layer_id
+        ].resid_dropout.register_forward_hook(create_mlp_output_hook(layer_id))
+        student_hook = student_model.model.layers[
+            layer_id
+        ].resid_dropout.register_forward_hook(create_mlp_output_hook(layer_id))
+
+        teacher_hooks.append(teacher_hook)
+        student_hooks.append(student_hook)
+
     teacher_model.eval()
     student_model.train()
 
@@ -56,9 +82,11 @@ def train(
         filter(lambda p: p.requires_grad, student_model.parameters()), lr=lr
     )
 
-    loss_fn = torch.nn.KLDivLoss(reduction="batchmean")
+    kldiv_loss_fn = torch.nn.KLDivLoss(reduction="batchmean")
+    mse_loss_fn = nn.MSELoss()
+
     input_ids = token_encodings.input_ids
-    seqlen = 2048
+    seqlen = 1024
     nsamples = input_ids.size(1) // seqlen  # Adjust based on actual shape
     for epoch in range(epochs):
         losses = []
@@ -69,25 +97,44 @@ def train(
             dynamic_ncols=True,
             mininterval=3 * 60,  # seconds between two updates
         ):
-            batch = input_ids[:, i * seqlen : (i + 1) * seqlen].to(device)
-            optimizer.zero_grad()
+            try:
+                batch = input_ids[:, i * seqlen : (i + 1) * seqlen].to(device)
+                optimizer.zero_grad()
 
-            # Process the teacher model's output
-            with torch.no_grad():
-                teacher_probs = F.softmax(
-                    teacher_model(input_ids=batch).logits / temperature, dim=-1
-                )
+                # Process the teacher model's output
+                with torch.no_grad():
+                    teacher_probs = F.softmax(
+                        teacher_model(input_ids=batch).logits / temperature, dim=-1
+                    )
+                    teacher_mlp_outputs = torch.stack(MLP_OUTPUT, dim=0).to(
+                        torch.float32
+                    )  # shallow copy
 
-            if torch.cuda.is_available():
                 student_log_probs = F.log_softmax(
                     student_model(input_ids=batch).logits / temperature, dim=-1
                 )
-                loss = loss_fn(student_log_probs, teacher_probs.to(torch.float32))
+                student_mlp_outputs = torch.stack(MLP_OUTPUT, dim=0)
+
+                mse_loss = mse_loss_fn(student_mlp_outputs, teacher_mlp_outputs)
+                kldiv_loss = kldiv_loss_fn(
+                    student_log_probs, teacher_probs.to(torch.float32)
+                )
+                loss = 3000 * mse_loss + kldiv_loss
                 loss.backward()
                 optimizer.step()
-            losses.append(loss.item())
+                losses.append(loss.item())
+            except Exception as e:
+                logging.error("GOT AN EXCEPTION")
+                logging.error(e)
+                # remove hooks to prevent memory leaks
+                for hook in teacher_hooks + student_hooks:
+                    hook.remove()
+                raise e
         avg_loss = sum(losses) / len(losses)
         logging.info(f"Average Loss: {avg_loss}")
+
+    for hook in teacher_hooks + student_hooks:
+        hook.remove()
 
     # training is done
     # have the student model same set of training params as teacher
@@ -133,6 +180,7 @@ def main(trainable_attention=False):
         epochs=1,
         lr=0.0004,
         trainable_attention=trainable_attention,
+        load_student_from_file=None,
     ).to(MODEL_PRECISION)
     # Save the model state dictionary
     torch.save(
