@@ -18,7 +18,7 @@ def train(
     temperature=1.1,
     trainable_attention=False,
     load_student_from_file=DATA_DIR
-    + "llm_cache/models--microsoft--phi-1_5_progressive_student.pth",
+    + "llm_cache/models--microsoft--phi-1_5_matryoshka_student.pth",
 ):
     device = teacher_model.device
     teacher_model = teacher_model.to(torch.float16)

@@ -151,7 +151,7 @@ def train(
         scaler = GradScaler()  # Initialize the GradScaler for handling mixed precision
 
     input_ids = token_encodings.input_ids
-    seqlen = 2048
+    seqlen = 1024
     nsamples = input_ids.size(1) // seqlen  # Adjust based on actual shape
     for epoch in range(epochs):
         losses = []
