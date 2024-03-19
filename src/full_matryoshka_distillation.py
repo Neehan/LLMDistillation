@@ -10,6 +10,44 @@ from constants import *
 # Assume MLP_OUTPUT is a global variable for capturing outputs
 MLP_OUTPUT = [0 for _ in range(24)]
 
+MATRYOSHKA_SIZE = 4096
+# Global variable to control the size of MLP
+CURRENT_MATRYOSHKA_SIZE = None  # None implies use the full model
+
+
+class MatryoshkaMLP(nn.Module):
+    def __init__(self, original_mlp):
+        super(MatryoshkaMLP, self).__init__()
+        self.original_mlp = original_mlp
+
+    def forward(self, x):
+        global CURRENT_MATRYOSHKA_SIZE
+        if CURRENT_MATRYOSHKA_SIZE is not None:
+            # Dynamic size logic based on CURRENT_MATRYOSHKA_SIZE
+            assert (
+                CURRENT_MATRYOSHKA_SIZE <= self.original_mlp.fc1.out_features
+            ), "CURRENT_MATRYOSHKA_SIZE too large"
+
+            x = F.linear(
+                x,
+                self.original_mlp.fc1.weight[:CURRENT_MATRYOSHKA_SIZE, :],
+                (
+                    self.original_mlp.fc1.bias[:CURRENT_MATRYOSHKA_SIZE]
+                    if self.original_mlp.fc1.bias is not None
+                    else None
+                ),
+            )
+            x = self.original_mlp.activation_fn(x)
+            x = F.linear(
+                x,
+                self.original_mlp.fc2.weight[:, :CURRENT_MATRYOSHKA_SIZE],
+                self.original_mlp.fc2.bias,  # Bias doesn't need to be sliced for the second layer
+            )
+        else:
+            # Use the full MLP as is
+            x = self.original_mlp(x)
+        return x
+
 
 def create_mlp_output_hook(layer_id):
     """
@@ -20,6 +58,29 @@ def create_mlp_output_hook(layer_id):
         MLP_OUTPUT[layer_id] = output
 
     return extract_mlp_output_hook
+
+
+def get_student_model_outputs(student_model, input_ids, matryoshka_size, temperature):
+    global CURRENT_MATRYOSHKA_SIZE
+    CURRENT_MATRYOSHKA_SIZE = matryoshka_size
+    student_log_probs = F.log_softmax(
+        student_model(input_ids=input_ids).logits / temperature, dim=-1
+    )
+    student_mlp_output = torch.stack(MLP_OUTPUT, dim=0)
+    return student_log_probs, student_mlp_output
+
+
+def get_student_loss(
+    student_log_probs,
+    student_mlp_outputs,
+    teacher_probs,
+    teacher_mlp_outputs,
+    mse_loss_fn,
+    kldiv_loss_fn,
+):
+    return mse_loss_fn(student_mlp_outputs, teacher_mlp_outputs) * 3000 + kldiv_loss_fn(
+        student_log_probs, teacher_probs.to(torch.float32)
+    )
 
 
 def train(
@@ -37,10 +98,8 @@ def train(
     if load_student_from_file is None:
         student_model = copy.deepcopy(teacher_model)
         for layer_id in range(len(student_model.model.layers)):
-            student_model.model.layers[layer_id].mlp = nn.Sequential(
-                nn.Linear(2048, 4096, bias=True),
-                nn.GELU(),
-                nn.Linear(4096, 2048, bias=True),
+            student_model.model.layers[layer_id].mlp = MatryoshkaMLP(
+                student_model.model.layers[layer_id].mlp
             )
 
     else:
@@ -108,16 +167,36 @@ def train(
                         torch.float32
                     )  # shallow copy
 
-                student_log_probs = F.log_softmax(
-                    student_model(input_ids=batch).logits / temperature, dim=-1
+                # get small student output
+                small_student_log_probs, small_student_mlp_outputs = (
+                    get_student_model_outputs(
+                        student_model, batch, MATRYOSHKA_SIZE, temperature
+                    )
                 )
-                student_mlp_outputs = torch.stack(MLP_OUTPUT, dim=0)
+                # get big student output
+                big_student_log_probs, big_student_mlp_outputs = (
+                    get_student_model_outputs(student_model, batch, None, temperature)
+                )
 
-                mse_loss = mse_loss_fn(student_mlp_outputs, teacher_mlp_outputs)
-                kldiv_loss = kldiv_loss_fn(
-                    student_log_probs, teacher_probs.to(torch.float32)
+                small_student_loss = get_student_loss(
+                    small_student_log_probs,
+                    small_student_mlp_outputs,
+                    teacher_probs,
+                    teacher_mlp_outputs,
+                    mse_loss_fn,
+                    kldiv_loss_fn,
                 )
-                loss = 3000 * mse_loss + kldiv_loss
+
+                big_student_loss = get_student_loss(
+                    big_student_log_probs,
+                    big_student_mlp_outputs,
+                    teacher_probs,
+                    teacher_mlp_outputs,
+                    mse_loss_fn,
+                    kldiv_loss_fn,
+                )
+
+                loss = small_student_loss + big_student_loss
                 loss.backward()
                 optimizer.step()
                 losses.append(loss.item())
@@ -182,7 +261,7 @@ def main(trainable_attention=False):
     # Save the model state dictionary
     torch.save(
         student_model,
-        DATA_DIR + model_path + "_full_student.pth",
+        DATA_DIR + model_path + "_fullmat_student.pth",
     )
     ppl = utils.calculate_perplexity(student_model, test_encodings)
     logging.info(f"Student model ppl: {ppl:.3f}")

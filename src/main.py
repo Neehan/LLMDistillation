@@ -2,6 +2,7 @@ import argparse
 import progressive_distillation
 import full_distillation
 import matryoshka_distillation
+import full_matryoshka_distillation
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -21,5 +22,7 @@ if __name__ == "__main__":
         progressive_distillation.main(args.train_attn)
     elif args.distill == "mat":
         matryoshka_distillation.main(args.train_attn)
+    elif args.distill == "fullmat":
+        full_matryoshka_distillation.main(args.train_attn)
     else:
         full_distillation.main(args.train_attn)
