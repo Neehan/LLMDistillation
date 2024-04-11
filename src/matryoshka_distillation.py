@@ -242,11 +242,11 @@ def main(model_path, trainable_attention=False):
 
     # Load the dataset
     train_encodings = utils.load_and_tokenize_dataset(
-        DATA_DIR + "datasets/wikitext",
+        DATA_DIR + "datasets/openwebtext",
         "train",
         tokenizer,
         max_length=1024,
-        dataset_name="wikitext-2-raw-v1",
+        # dataset_name="wikitext-2-raw-v1",
     )
 
     test_encodings = utils.load_and_tokenize_dataset(
@@ -254,10 +254,9 @@ def main(model_path, trainable_attention=False):
         "test",
         tokenizer,
         max_length=1024,
-        dataset_name="wikitext-2-raw-v1",
+        dataset_name="wikitext-103-raw-v1",
     )
 
-    print(teacher_model)
     n_layers = len(teacher_model.transformer.h)
 
     for i in range(n_layers):

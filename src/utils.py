@@ -58,7 +58,9 @@ def load_and_tokenize_dataset(
     batch_size: number of samples to include in each concatenated batch (approximate)
     tokenizer: tokenizer instance from Huggingface
     """
-    dataset = datasets.load_dataset(path, dataset_name, split=split, streaming=True)
+    dataset = datasets.load_dataset(
+        path, dataset_name, split=split, streaming=True, trust_remote_code=True
+    )
 
     buffer_texts = []
     buffer_length = 0
@@ -66,13 +68,15 @@ def load_and_tokenize_dataset(
     for example in dataset:
         text = example["text"]
         # Estimate token count to prevent encoding text which is too long
-        part_length = 2 * len(text.split())
-        if buffer_length + part_length > max_length:
+        part_length = 1.5 * len(text.split())
+        if buffer_length + part_length > max_length and buffer_length > 0:
             # Tokenize the accumulated texts
             concatenated_text = "\n\n".join(buffer_texts)
             input_ids = tokenizer(
                 concatenated_text,
                 return_tensors="pt",
+                max_length=max_length,
+                truncation=True,
             )
             yield input_ids
             buffer_texts, buffer_length = [], 0
@@ -80,12 +84,15 @@ def load_and_tokenize_dataset(
         buffer_texts.append(text)
         buffer_length += part_length
 
-    if buffer_texts:
+    if len(buffer_texts) > 0:
+        print("hitting the tail if")
         # Tokenize any remaining texts
         concatenated_text = "\n\n".join(buffer_texts)
         input_ids = tokenizer(
             concatenated_text,
             return_tensors="pt",
+            max_length=max_length,
+            truncation=True,
         )
         yield input_ids
 
