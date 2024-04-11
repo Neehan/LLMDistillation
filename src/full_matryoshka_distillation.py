@@ -226,12 +226,11 @@ def train(
     return student_model
 
 
-def main(trainable_attention=False):
+def main(model_path, trainable_attention=False):
     """
     progressively distill a student model by distilling one MLP
     layer at a time and then using the resulting model as teacher
     """
-    model_path = "llm_cache/models--microsoft--phi-1_5"
     teacher_model, tokenizer = utils.load_model_and_tokenizer(DATA_DIR + model_path)
 
     if trainable_attention:

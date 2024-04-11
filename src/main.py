@@ -3,11 +3,15 @@ import progressive_distillation
 import full_distillation
 import matryoshka_distillation
 import full_matryoshka_distillation
+import constants
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--distill", help="type of distillation", default="full", type=str
+    )
+    parser.add_argument(
+        "--model", help="the model to distill", default="gpt2", type=str
     )
     parser.add_argument(
         "--train-attn",
@@ -18,11 +22,13 @@ if __name__ == "__main__":
     parser.set_defaults(train_attn=False)
 
     args = parser.parse_args()
+    model_path = constants.MODEL_PATHS[args.model]
+
     if args.distill == "progressive":
-        progressive_distillation.main(args.train_attn)
+        progressive_distillation.main(model_path, args.train_attn)
     elif args.distill == "mat":
-        matryoshka_distillation.main(args.train_attn)
+        matryoshka_distillation.main(model_path, args.train_attn)
     elif args.distill == "fullmat":
-        full_matryoshka_distillation.main(args.train_attn)
+        full_matryoshka_distillation.main(model_path, args.train_attn)
     else:
-        full_distillation.main(args.train_attn)
+        full_distillation.main(model_path, args.train_attn)

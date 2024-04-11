@@ -13,7 +13,7 @@ from constants import *
 # Assume MLP_OUTPUT is a global variable for capturing outputs
 MLP_OUTPUT = None
 
-MATRYOSHKA_SIZE = 4096
+MATRYOSHKA_SIZE = 1536
 # Global variable to control the size of MLP
 CURRENT_MATRYOSHKA_SIZE = None  # None implies use the full model
 
@@ -26,26 +26,33 @@ class MatryoshkaMLP(nn.Module):
     def forward(self, x):
         global CURRENT_MATRYOSHKA_SIZE
         if CURRENT_MATRYOSHKA_SIZE is not None:
-            # Dynamic size logic based on CURRENT_MATRYOSHKA_SIZE
+            # Ensure the current size is within the allowed dimensions
+            hidden_dim = self.original_mlp.c_fc.weight.shape[1]
             assert (
-                CURRENT_MATRYOSHKA_SIZE <= self.original_mlp.fc1.out_features
-            ), "CURRENT_MATRYOSHKA_SIZE too large"
+                CURRENT_MATRYOSHKA_SIZE <= hidden_dim
+            ), f"CURRENT_MATRYOSHKA_SIZE too large ({CURRENT_MATRYOSHKA_SIZE} <= {hidden_dim})"
+
+            # Adjust the weights and biases for the c_fc layer
+            weight_fc = self.original_mlp.c_fc.weight[:, :CURRENT_MATRYOSHKA_SIZE]
+            bias_fc = (
+                self.original_mlp.c_fc.bias[:CURRENT_MATRYOSHKA_SIZE]
+                if self.original_mlp.c_fc.bias is not None
+                else None
+            )
 
             x = F.linear(
-                x,
-                self.original_mlp.fc1.weight[:CURRENT_MATRYOSHKA_SIZE, :],
-                (
-                    self.original_mlp.fc1.bias[:CURRENT_MATRYOSHKA_SIZE]
-                    if self.original_mlp.fc1.bias is not None
-                    else None
-                ),
-            )
-            x = self.original_mlp.activation_fn(x)
-            x = F.linear(
-                x,
-                self.original_mlp.fc2.weight[:, :CURRENT_MATRYOSHKA_SIZE],
-                self.original_mlp.fc2.bias,  # Bias doesn't need to be sliced for the second layer
-            )
+                x, weight_fc.T, bias_fc
+            )  # Using F.linear because GPT-2 uses linear mappings reshaped, not actual Conv1D
+            x = self.original_mlp.act(x)
+            x = self.original_mlp.dropout(x)  # Apply dropout after activation
+
+            # Adjust the weights for the c_proj layer
+            weight_proj = self.original_mlp.c_proj.weight[:CURRENT_MATRYOSHKA_SIZE, :]
+            bias_proj = self.original_mlp.c_proj.bias
+
+            # Apply the second projection layer
+            x = F.linear(x, weight_proj.T, bias_proj)
+            x = self.original_mlp.dropout(x)  # Apply dropout after projection
         else:
             # Use the full MLP as is
             x = self.original_mlp(x)
@@ -79,17 +86,17 @@ def copy_smaller_mlp(student_model, layer_id):
         nn.GELU(),
         nn.Linear(MATRYOSHKA_SIZE, 2048, bias=True),
     )
-    learned_mlp = student_model.model.layers[layer_id].mlp
+    learned_mlp = student_model.transformer.h[layer_id].mlp
 
-    new_mlp[0].weight.data = learned_mlp.original_mlp.fc1.weight[
+    new_mlp[0].weight.data = learned_mlp.original_mlp.c_fc.weight[
         :MATRYOSHKA_SIZE, :
     ].data
-    new_mlp[0].bias.data = learned_mlp.original_mlp.fc1.bias[:MATRYOSHKA_SIZE].data
+    new_mlp[0].bias.data = learned_mlp.original_mlp.c_fc.bias[:MATRYOSHKA_SIZE].data
 
-    new_mlp[2].weight.data = learned_mlp.original_mlp.fc2.weight[
+    new_mlp[2].weight.data = learned_mlp.original_mlp.c_proj.weight[
         :, :MATRYOSHKA_SIZE
     ].data
-    new_mlp[2].bias.data = learned_mlp.original_mlp.fc2.bias.data
+    new_mlp[2].bias.data = learned_mlp.original_mlp.c_proj.bias.data
     return new_mlp
 
 
@@ -105,14 +112,14 @@ def train(
     teacher_model = teacher_model.to(MODEL_PRECISION)
 
     student_model = copy.deepcopy(teacher_model)
-    student_model.model.layers[layer_id].mlp = (
-        MatryoshkaMLP(student_model.model.layers[layer_id].mlp)
+    student_model.transformer.h[layer_id].mlp = (
+        MatryoshkaMLP(student_model.transformer.h[layer_id].mlp)
         .to(device)
         .to(torch.float32)
     )
 
     if trainable_attention:
-        student_model.model.layers[layer_id].self_attn = student_model.model.layers[
+        student_model.transformer.h[layer_id].self_attn = student_model.transformer.h[
             layer_id
         ].self_attn.to(torch.float32)
 
@@ -122,23 +129,23 @@ def train(
         # Disable gradient updates for all parameters except for layer_id
         for name, param in student_model.named_parameters():
             if (
-                f"model.layers.{layer_id}.mlp" not in name
-                and f"model.layers.{layer_id}.self_attn" not in name
+                f"transformer.h.{layer_id}.mlp" not in name
+                and f"transformer.h.{layer_id}.self_attn" not in name
             ):
                 param.requires_grad = False
     else:
         # Disable gradient updates for all parameters except for the MLP
         for name, param in student_model.named_parameters():
-            if f"model.layers.{layer_id}.mlp" not in name:
+            if f"transformer.h.{layer_id}.mlp" not in name:
                 param.requires_grad = False
 
     # Register hooks to capture outputs from the teacher and student MLPs
-    teacher_hook = teacher_model.model.layers[
+    teacher_hook = teacher_model.transformer.h[
         layer_id
-    ].resid_dropout.register_forward_hook(extract_mlp_output_hook)
-    student_hook = student_model.model.layers[
+    ].mlp.c_proj.register_forward_hook(extract_mlp_output_hook)
+    student_hook = student_model.transformer.h[
         layer_id
-    ].resid_dropout.register_forward_hook(extract_mlp_output_hook)
+    ].mlp.original_mlp.c_proj.register_forward_hook(extract_mlp_output_hook)
 
     teacher_model.eval()
     student_model.train()
@@ -150,20 +157,18 @@ def train(
     if torch.cuda.is_available():
         scaler = GradScaler()  # Initialize the GradScaler for handling mixed precision
 
-    input_ids = token_encodings.input_ids
-    seqlen = 1024
-    nsamples = input_ids.size(1) // seqlen  # Adjust based on actual shape
     for epoch in range(epochs):
         losses = []
-        for i in tqdm(
-            range(nsamples),
-            desc=f"Epoch {epoch+1}/{epochs}",
+        batch_generator = tqdm(
+            token_encodings,
+            desc="Processing batches",
             file=TQDM_OUTPUT,
             dynamic_ncols=True,
-            mininterval=3 * 60,  # seconds between two updates
-        ):
+            mininterval=3 * 60,
+        )
+        for encoding in batch_generator:
             try:
-                batch = input_ids[:, i * seqlen : (i + 1) * seqlen].to(device)
+                batch = encoding["input_ids"].to(device)
                 optimizer.zero_grad()
 
                 # Process the teacher model's output
@@ -206,7 +211,9 @@ def train(
     teacher_hook.remove()
     student_hook.remove()
 
-    student_model.model.layers[layer_id].mlp = copy_smaller_mlp(student_model, layer_id)
+    student_model.transformer.h[layer_id].mlp = copy_smaller_mlp(
+        student_model, layer_id
+    )
     # training is done
     # have the student model same set of training params as teacher
     # Assuming teacher_model and student_model are your model instances
@@ -221,12 +228,11 @@ def train(
     return student_model
 
 
-def main(trainable_attention=False):
+def main(model_path, trainable_attention=False):
     """
     progressively distill a student model by distilling one MLP
     layer at a time and then using the resulting model as teacher
     """
-    model_path = "llm_cache/models--microsoft--phi-1_5"
     teacher_model, tokenizer = utils.load_model_and_tokenizer(DATA_DIR + model_path)
 
     if trainable_attention:
@@ -236,13 +242,23 @@ def main(trainable_attention=False):
 
     # Load the dataset
     train_encodings = utils.load_and_tokenize_dataset(
-        DATA_DIR + "datasets/wikitext", "train", tokenizer, "wikitext-2-raw-v1"
-    )
-    test_encodings = utils.load_and_tokenize_dataset(
-        DATA_DIR + "datasets/wikitext", "test", tokenizer, "wikitext-2-raw-v1"
+        DATA_DIR + "datasets/wikitext",
+        "train",
+        tokenizer,
+        max_length=1024,
+        dataset_name="wikitext-2-raw-v1",
     )
 
-    n_layers = len(teacher_model.model.layers)
+    test_encodings = utils.load_and_tokenize_dataset(
+        DATA_DIR + "datasets/wikitext",
+        "test",
+        tokenizer,
+        max_length=1024,
+        dataset_name="wikitext-2-raw-v1",
+    )
+
+    print(teacher_model)
+    n_layers = len(teacher_model.transformer.h)
 
     for i in range(n_layers):
         logging.info(f"Training student model {i}.")

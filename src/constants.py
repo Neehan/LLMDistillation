@@ -54,3 +54,8 @@ else:
     )
 
 TQDM_OUTPUT = TqdmToLogger(logging.getLogger(), level=logging.INFO)
+
+MODEL_PATHS = {
+    "phi1.5": "llm_cache/models--microsoft--phi-1_5",
+    "gpt2": "llm_cache/gpt2",
+}

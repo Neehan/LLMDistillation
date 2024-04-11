@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 
-# import datasets
+import datasets
 from constants import *
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import pandas as pd
@@ -25,25 +25,69 @@ def load_model_and_tokenizer(path):
     return model, tokenizer
 
 
-def load_and_tokenize_dataset(path, split, tokenizer, dataset_name=None):
-    """
-    path: path locally, not in hf
-    split: test, train etc
-    dataset_name: some datasets have multiple versions, need to specify which
-    """
-    if dataset_name is None:
-        path = path + f"/{split}-00000-of-00001.parquet"
-    else:
-        path = path + "/" + dataset_name + f"/{split}-00000-of-00001.parquet"
+# def load_and_tokenize_dataset(path, split, tokenizer, dataset_name=None):
+#     """
+#     path: path locally, not in hf
+#     split: test, train etc
+#     dataset_name: some datasets have multiple versions, need to specify which
+#     """
 
-        # dataset = datasets.load_dataset(
-        #     path, dataset_name, split=split, keep_in_memory=True
-        # )
-    logging.info(f"loading dataset from {path}.")
-    dataset = pd.read_parquet(path)
-    logging.info(f"tokenizing {path}.")
-    encodings = tokenizer("\n\n".join(dataset["text"].tolist()), return_tensors="pt")
-    return encodings
+#     dataset = datasets.load_dataset(
+#         path,
+#         dataset_name,
+#         split=split,
+#         keep_in_memory=True,
+#     )
+#     logging.info(f"loading dataset from {path}.")
+#     dataset = pd.read_parquet(path)
+#     logging.info(f"tokenizing {path}.")
+#     encodings = tokenizer("\n\n".join(dataset["text"].tolist()), return_tensors="pt")
+#     return encodings
+
+
+def load_and_tokenize_dataset(
+    path, split, tokenizer, max_length=1024, dataset_name=None
+):
+    """
+    Yields batches of tokenized data on-the-fly.
+
+    path: path locally or the dataset identifier from Huggingface
+    split: 'test', 'train' etc.
+    dataset_name: name of the dataset if it has multiple versions
+    max_length: maximum length of the concatenated token sequences
+    batch_size: number of samples to include in each concatenated batch (approximate)
+    tokenizer: tokenizer instance from Huggingface
+    """
+    dataset = datasets.load_dataset(path, dataset_name, split=split, streaming=True)
+
+    buffer_texts = []
+    buffer_length = 0
+
+    for example in dataset:
+        text = example["text"]
+        # Estimate token count to prevent encoding text which is too long
+        part_length = 2 * len(text.split())
+        if buffer_length + part_length > max_length:
+            # Tokenize the accumulated texts
+            concatenated_text = "\n\n".join(buffer_texts)
+            input_ids = tokenizer(
+                concatenated_text,
+                return_tensors="pt",
+            )
+            yield input_ids
+            buffer_texts, buffer_length = [], 0
+
+        buffer_texts.append(text)
+        buffer_length += part_length
+
+    if buffer_texts:
+        # Tokenize any remaining texts
+        concatenated_text = "\n\n".join(buffer_texts)
+        input_ids = tokenizer(
+            concatenated_text,
+            return_tensors="pt",
+        )
+        yield input_ids
 
 
 def calculate_perplexity(model, encodings):
