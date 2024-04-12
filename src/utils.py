@@ -68,7 +68,7 @@ def prepare_and_save_chunks(path, split, tokenizer, dataset_name=None):
         large_text.append(example["text"])
         word_count += len(example["text"].split())
         # Check if the accumulated texts are roughly 500 MB in size (assuming ~1 byte per char)
-        if word_count >= 50000 * 1024:  # Approx 500MB
+        if word_count >= 64 * 1024:  # Approx 500MB
             concatenated_text = "\n\n".join(large_text)
             encoded_chunk = tokenizer(
                 concatenated_text, return_tensors="pt", padding=False, truncation=False
