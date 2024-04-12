@@ -160,7 +160,7 @@ def train(
 
     for epoch in range(epochs):
         losses = []
-        loss = 0
+        loss = torch.tensor(0.0, device=teacher_model.device)
         batch_counter = 0
         batch_generator = tqdm(
             token_encodings,
@@ -193,7 +193,7 @@ def train(
                         scaler.step(optimizer)
                         scaler.update()
 
-                        loss = 0
+                        loss = torch.tensor(0.0, device=teacher_model.device)
                         batch_counter = 0
                     else:
                         batch_counter += 1
