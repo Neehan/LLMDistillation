@@ -240,7 +240,7 @@ def main(model_path, trainable_attention=False):
         "train",
         tokenizer,
         max_length=1024,
-        batch_size=128,
+        batch_size=96,
         # dataset_name="wikitext-2-raw-v1",
     )
 
