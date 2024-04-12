@@ -113,11 +113,13 @@ def load_and_tokenize_dataset(
         prepare_and_save_chunks(path, split, tokenizer, dataset_name)
 
     chunks = sorted(os.listdir(encodings_dir))  # Ensure chunks are processed in order
+    # keep one out of 10
+    chunks = list(chunks)[0::25]
 
     for chunk_file in tqdm(
         chunks,
         desc="Training",
-        mininterval=5 * 60,
+        mininterval=15 * 60,
         file=TQDM_OUTPUT,
     ):
         if chunk_file.startswith(f"{split}_chunk") and chunk_file.endswith(".pt"):
