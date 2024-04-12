@@ -162,14 +162,7 @@ def train(
         losses = []
         loss = torch.tensor(0.0, device=teacher_model.device)
         batch_counter = 0
-        batch_generator = tqdm(
-            token_encodings,
-            desc="Training",
-            file=TQDM_OUTPUT,
-            dynamic_ncols=True,
-            mininterval=3 * 60,
-        )
-        for encoding in batch_generator:
+        for encoding in token_encodings:
             try:
                 batch = encoding.to(device)
 

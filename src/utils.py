@@ -114,7 +114,12 @@ def load_and_tokenize_dataset(
 
     chunks = sorted(os.listdir(encodings_dir))  # Ensure chunks are processed in order
 
-    for chunk_file in chunks:
+    for chunk_file in tqdm(
+        chunks,
+        desc="Training",
+        mininterval=5 * 60,
+        file=TQDM_OUTPUT,
+    ):
         if chunk_file.startswith(f"{split}_chunk") and chunk_file.endswith(".pt"):
             chunk_path = os.path.join(encodings_dir, chunk_file)
             chunk = torch.load(chunk_path)
