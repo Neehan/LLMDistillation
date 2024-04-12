@@ -90,7 +90,9 @@ def prepare_and_save_chunks(path, split, tokenizer, dataset_name=None):
         encoded_chunk = tokenizer(
             concatenated_text, return_tensors="pt", padding=False, truncation=False
         )
-        torch.save(encoded_chunk, os.path.join(encodings_dir, f"chunk_{file_index}.pt"))
+        torch.save(
+            encoded_chunk, os.path.join(encodings_dir, f"{split}_chunk_{file_index}.pt")
+        )
 
 
 def load_and_tokenize_dataset(
@@ -103,11 +105,12 @@ def load_and_tokenize_dataset(
     split: 'test', 'train' etc. (used to locate the correct tokenized data)
     max_length: Maximum length of the concatenated token sequences
     """
+    logging.info(f"loading dataset from {path}")
     encodings_dir = os.path.join(path, "encodings")
     # Ensure the directory exists before listing contents; if not, prepare the chunks
     if not os.path.exists(encodings_dir) or not os.listdir(encodings_dir):
         os.makedirs(encodings_dir, exist_ok=True)
-        prepare_and_save_chunks(path, split, tokenizer)
+        prepare_and_save_chunks(path, split, tokenizer, dataset_name)
 
     chunks = sorted(os.listdir(encodings_dir))  # Ensure chunks are processed in order
 
@@ -125,27 +128,26 @@ def load_and_tokenize_dataset(
 
 def calculate_perplexity(model, encodings):
     model.seqlen = 1024
-    encodings = encodings.input_ids.to(model.device)
-    nsamples = encodings.numel() // model.seqlen
     model = model.eval()
     nlls = []
 
-    for i in tqdm(
-        range(nsamples),
+    nsamples = 0
+
+    for batch in tqdm(
+        encodings,
         desc="computing ppl...",
         file=TQDM_OUTPUT,
         dynamic_ncols=True,
         mininterval=5 * 60,  # seconds between two updates
     ):
-        batch = encodings[:, (i * model.seqlen) : ((i + 1) * model.seqlen)].to(
-            model.device
-        )
+        batch = batch.to(model.device)
+        nsamples += batch.shape[1]
+
         with torch.no_grad():
-            lm_logits = model(batch).logits
+            outputs = model(input_ids=batch)
+            lm_logits = outputs.logits
         shift_logits = lm_logits[:, :-1, :].contiguous().float()
-        shift_labels = encodings[:, (i * model.seqlen) : ((i + 1) * model.seqlen)][
-            :, 1:
-        ]
+        shift_labels = batch[:, 1:]
         loss_fct = nn.CrossEntropyLoss()
         loss = loss_fct(
             shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1)

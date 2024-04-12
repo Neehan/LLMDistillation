@@ -164,14 +164,15 @@ def train(
         batch_counter = 0
         batch_generator = tqdm(
             token_encodings,
-            desc="Processing batches",
+            desc="Training",
             file=TQDM_OUTPUT,
             dynamic_ncols=True,
             mininterval=3 * 60,
         )
         for encoding in batch_generator:
             try:
-                batch = encoding["input_ids"].to(device)
+                batch = encoding.to(device)
+
                 optimizer.zero_grad()
 
                 # Process the teacher model's output
@@ -226,9 +227,9 @@ def train(
     teacher_hook.remove()
     student_hook.remove()
 
-    student_model.transformer.h[layer_id].mlp = copy_smaller_mlp(
-        student_model, layer_id
-    )
+    # student_model.transformer.h[layer_id].mlp = copy_smaller_mlp(
+    #     student_model, layer_id
+    # )
     # training is done
     # have the student model same set of training params as teacher
     # Assuming teacher_model and student_model are your model instances
@@ -292,6 +293,7 @@ def main(model_path, trainable_attention=False):
             student_model,
             DATA_DIR + model_path + f"_matryoshka_student_{i}.pth",
         )
+
         ppl = utils.calculate_perplexity(student_model, test_encodings)
         logging.info(f"Student model {i} ppl: {ppl:.3f}")
 
