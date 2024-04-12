@@ -107,7 +107,7 @@ def train(
     epochs=1,
     lr=0.0004,
     trainable_attention=False,
-    batch_size=1024,
+    batch_size=128,
 ):
     device = teacher_model.device
     teacher_model = teacher_model.to(MODEL_PRECISION)
