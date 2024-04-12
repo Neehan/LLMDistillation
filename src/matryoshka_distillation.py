@@ -259,8 +259,8 @@ def main(model_path, trainable_attention=False):
 
     n_layers = len(teacher_model.transformer.h)
 
-    for i in range(n_layers):
-        logging.info(f"Training student model {i}.")
+    for i in range(n_layers - 1, -1, -1):
+        logging.info(f"Training student model {n_layers - 1 - i}.")
         # student model's i-th layer's MLP has been shrunk and rest of the layers are identical to teacher model.
         # we can use this student model to train the next student model whose next layer will be shrunk
         student_model = train(
@@ -275,7 +275,7 @@ def main(model_path, trainable_attention=False):
         # Save the model state dictionary
         torch.save(
             student_model,
-            DATA_DIR + model_path + "_matryoshka_student.pth",
+            DATA_DIR + model_path + f"_matryoshka_student_{i}.pth",
         )
         ppl = utils.calculate_perplexity(student_model, test_encodings)
         logging.info(f"Student model {i} ppl: {ppl:.3f}")

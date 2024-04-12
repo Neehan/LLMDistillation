@@ -45,60 +45,82 @@ def load_model_and_tokenizer(path):
 #     return encodings
 
 
-def load_and_tokenize_dataset(
-    path, split, tokenizer, max_length=1024, dataset_name=None
-):
+def prepare_and_save_chunks(path, split, tokenizer, dataset_name=None):
     """
-    Yields batches of tokenized data on-the-fly.
+    Tokenizes large text chunks and saves them separately to manage memory usage efficiently.
 
     path: path locally or the dataset identifier from Huggingface
     split: 'test', 'train' etc.
     dataset_name: name of the dataset if it has multiple versions
-    max_length: maximum length of the concatenated token sequences
-    batch_size: number of samples to include in each concatenated batch (approximate)
     tokenizer: tokenizer instance from Huggingface
     """
+    encodings_dir = os.path.join(path, "encodings")
+    # Load dataset in streaming mode
     dataset = datasets.load_dataset(
         path, dataset_name, split=split, streaming=True, trust_remote_code=True
     )
 
-    buffer_texts = []
-    buffer_length = 0
+    large_text = []
+    char_count = 0
+    file_index = 0
 
-    for example in dataset:
-        text = example["text"]
-        # Estimate token count to prevent encoding text which is too long
-        part_length = 1.5 * len(text.split())
-        if buffer_length + part_length > max_length and buffer_length > 0:
-            # Tokenize the accumulated texts
-            concatenated_text = "\n\n".join(buffer_texts)
-            input_ids = tokenizer(
-                concatenated_text,
-                return_tensors="pt",
-                max_length=max_length,
-                truncation=True,
+    for example in tqdm(dataset, desc="Tokenizing Dataset"):
+        large_text.append(example["text"])
+        char_count += len(example["text"])
+        # Check if the accumulated texts are roughly 500 MB in size (assuming ~1 byte per char)
+        if char_count >= 500 * 1024 * 1024:  # Approx 500MB
+            concatenated_text = "\n\n".join(large_text)
+            encoded_chunk = tokenizer(
+                concatenated_text, return_tensors="pt", padding=False, truncation=False
             )
-            yield input_ids
-            buffer_texts, buffer_length = [], 0
+            torch.save(
+                encoded_chunk,
+                os.path.join(encodings_dir, f"{split}_chunk_{file_index}.pt"),
+            )
+            large_text = []
+            char_count = 0
+            file_index += 1
 
-        buffer_texts.append(text)
-        buffer_length += part_length
-
-    if len(buffer_texts) > 0:
-        print("hitting the tail if")
-        # Tokenize any remaining texts
-        concatenated_text = "\n\n".join(buffer_texts)
-        input_ids = tokenizer(
-            concatenated_text,
-            return_tensors="pt",
-            max_length=max_length,
-            truncation=True,
+    if len(large_text) > 0:  # Tokenize and save any remaining text
+        concatenated_text = "\n\n".join(large_text)
+        encoded_chunk = tokenizer(
+            concatenated_text, return_tensors="pt", padding=False, truncation=False
         )
-        yield input_ids
+        torch.save(encoded_chunk, os.path.join(encodings_dir, f"chunk_{file_index}.pt"))
+
+
+def load_and_tokenize_dataset(
+    path, split, tokenizer, max_length=1024, dataset_name=None
+):
+    """
+    Yields smaller batches of tokens from pre-tokenized and saved chunks.
+
+    path: Local system path to the directory containing tokenized chunks
+    split: 'test', 'train' etc. (used to locate the correct tokenized data)
+    max_length: Maximum length of the concatenated token sequences
+    """
+    encodings_dir = os.path.join(path, "encodings")
+    # Ensure the directory exists before listing contents; if not, prepare the chunks
+    if not os.path.exists(encodings_dir) or not os.listdir(encodings_dir):
+        os.makedirs(encodings_dir, exist_ok=True)
+        prepare_and_save_chunks(path, split, tokenizer)
+
+    chunks = sorted(os.listdir(encodings_dir))  # Ensure chunks are processed in order
+
+    for chunk_file in chunks:
+        if chunk_file.startswith(f"{split}_chunk") and chunk_file.endswith(".pt"):
+            chunk_path = os.path.join(encodings_dir, chunk_file)
+            chunk = torch.load(chunk_path)
+            input_ids = chunk["input_ids"]
+            start = 0
+            while start < input_ids.size(1):
+                end = start + max_length
+                yield input_ids[:, start:end]
+                start = end
 
 
 def calculate_perplexity(model, encodings):
-    model.seqlen = 2048
+    model.seqlen = 1024
     encodings = encodings.input_ids.to(model.device)
     nsamples = encodings.numel() // model.seqlen
     model = model.eval()
