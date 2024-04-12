@@ -66,9 +66,9 @@ def prepare_and_save_chunks(path, split, tokenizer, dataset_name=None):
 
     for example in tqdm(dataset, desc="Tokenizing Dataset"):
         large_text.append(example["text"])
-        char_count += len(example["text"])
+        word_count += len(example["text"].split())
         # Check if the accumulated texts are roughly 500 MB in size (assuming ~1 byte per char)
-        if char_count >= 500 * 1024 * 1024:  # Approx 500MB
+        if word_count >= 50000 * 1024:  # Approx 500MB
             concatenated_text = "\n\n".join(large_text)
             encoded_chunk = tokenizer(
                 concatenated_text, return_tensors="pt", padding=False, truncation=False
@@ -78,7 +78,7 @@ def prepare_and_save_chunks(path, split, tokenizer, dataset_name=None):
                 os.path.join(encodings_dir, f"{split}_chunk_{file_index}.pt"),
             )
             large_text = []
-            char_count = 0
+            word_count = 0
             file_index += 1
 
     if len(large_text) > 0:  # Tokenize and save any remaining text
