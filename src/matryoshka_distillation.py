@@ -107,7 +107,6 @@ def train(
     epochs=1,
     lr=0.0004,
     trainable_attention=False,
-    batch_size=128,
 ):
     device = teacher_model.device
     teacher_model = teacher_model.to(MODEL_PRECISION)
@@ -160,8 +159,6 @@ def train(
 
     for epoch in range(epochs):
         losses = []
-        loss = torch.tensor(0.0, device=teacher_model.device)
-        batch_counter = 0
         for encoding in token_encodings:
             try:
                 batch = encoding.to(device)
@@ -176,32 +173,20 @@ def train(
                 if torch.cuda.is_available():
                     # Use autocast for the forward pass to manage mixed precision
                     with autocast():
-                        loss += get_student_model_mlp_loss(
+                        loss = get_student_model_mlp_loss(
                             student_model, batch, teacher_mlp_output, loss_fn
                         )
 
-                    if batch_counter >= batch_size:
-                        # Scale loss and backward
-                        scaler.scale(loss).backward()
-                        scaler.step(optimizer)
-                        scaler.update()
-
-                        loss = torch.tensor(0.0, device=teacher_model.device)
-                        batch_counter = 0
-                    else:
-                        batch_counter += 1
-
+                    # Scale loss and backward
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
                 else:
-                    loss += get_student_model_mlp_loss(
+                    loss = get_student_model_mlp_loss(
                         student_model, batch, teacher_mlp_output, loss_fn
                     )
-                    if batch_counter >= batch_size:
-                        loss.backward()
-                        optimizer.step()
-                        loss = 0
-                        batch_counter = 0
-                    else:
-                        batch_counter += 1
+                    loss.backward()
+                    optimizer.step()
 
                 losses.append(loss.item())
 
@@ -255,6 +240,7 @@ def main(model_path, trainable_attention=False):
         "train",
         tokenizer,
         max_length=1024,
+        batch_size=128,
         # dataset_name="wikitext-2-raw-v1",
     )
 
@@ -264,6 +250,7 @@ def main(model_path, trainable_attention=False):
         tokenizer,
         max_length=1024,
         dataset_name="wikitext-103-raw-v1",
+        batch_size=1,
     )
 
     n_layers = len(teacher_model.transformer.h)

@@ -96,7 +96,7 @@ def prepare_and_save_chunks(path, split, tokenizer, dataset_name=None):
 
 
 def load_and_tokenize_dataset(
-    path, split, tokenizer, max_length=1024, dataset_name=None
+    path, split, tokenizer, max_length=1024, dataset_name=None, batch_size=128
 ):
     """
     Yields smaller batches of tokens from pre-tokenized and saved chunks.
@@ -113,8 +113,10 @@ def load_and_tokenize_dataset(
         prepare_and_save_chunks(path, split, tokenizer, dataset_name)
 
     chunks = sorted(os.listdir(encodings_dir))  # Ensure chunks are processed in order
-    # keep one out of 10
-    chunks = list(chunks)[0::25]
+
+    # keep one out of 25 cause dataset is huge
+    if "openwebtext" in path:
+        chunks = list(chunks)[0::25]
 
     for chunk_file in tqdm(
         chunks,
@@ -128,8 +130,10 @@ def load_and_tokenize_dataset(
             input_ids = chunk["input_ids"]
             start = 0
             while start < input_ids.size(1):
-                end = start + max_length
-                yield input_ids[:, start:end]
+                end = start + max_length * batch_size
+                if end >= input_ids.size(1):
+                    break
+                yield input_ids[:, start:end].reshape(batch_size, -1)
                 start = end
 
 
