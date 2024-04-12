@@ -107,6 +107,7 @@ def train(
     epochs=1,
     lr=0.0004,
     trainable_attention=False,
+    batch_size=1024,
 ):
     device = teacher_model.device
     teacher_model = teacher_model.to(MODEL_PRECISION)
@@ -159,6 +160,8 @@ def train(
 
     for epoch in range(epochs):
         losses = []
+        loss = 0
+        batch_counter = 0
         batch_generator = tqdm(
             token_encodings,
             desc="Processing batches",
@@ -179,20 +182,32 @@ def train(
                 if torch.cuda.is_available():
                     # Use autocast for the forward pass to manage mixed precision
                     with autocast():
-                        loss = get_student_model_mlp_loss(
+                        loss += get_student_model_mlp_loss(
                             student_model, batch, teacher_mlp_output, loss_fn
                         )
 
-                    # Scale loss and backward
-                    scaler.scale(loss).backward()
-                    scaler.step(optimizer)
-                    scaler.update()
+                    if batch_counter >= batch_size:
+                        # Scale loss and backward
+                        scaler.scale(loss).backward()
+                        scaler.step(optimizer)
+                        scaler.update()
+
+                        loss = 0
+                        batch_counter = 0
+                    else:
+                        batch_counter += 1
+
                 else:
-                    loss = get_student_model_mlp_loss(
+                    loss += get_student_model_mlp_loss(
                         student_model, batch, teacher_mlp_output, loss_fn
                     )
-                    loss.backward()
-                    optimizer.step()
+                    if batch_counter >= batch_size:
+                        loss.backward()
+                        optimizer.step()
+                        loss = 0
+                        batch_counter = 0
+                    else:
+                        batch_counter += 1
 
                 losses.append(loss.item())
 

@@ -64,7 +64,11 @@ def prepare_and_save_chunks(path, split, tokenizer, dataset_name=None):
     word_count = 0
     file_index = 0
 
-    for example in tqdm(dataset, desc="Tokenizing Dataset"):
+    for example in tqdm(
+        dataset,
+        desc="Tokenizing Dataset",
+        mininterval=3 * 60,
+    ):
         large_text.append(example["text"])
         word_count += len(example["text"].split())
         # Check if the accumulated texts are roughly 500 MB in size (assuming ~1 byte per char)
