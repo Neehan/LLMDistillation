@@ -234,7 +234,7 @@ def main(model_path, trainable_attention=False):
 
     n_layers = len(teacher_model.transformer.h)
 
-    for i in range(n_layers - 1, -1, -1):
+    for i in range(n_layers):
         # Load the dataset each time cause it's a generator under the hood
         train_encodings = utils.load_and_tokenize_dataset(
             DATA_DIR + "datasets/openwebtext",
@@ -254,7 +254,7 @@ def main(model_path, trainable_attention=False):
             # dataset_name="wikitext-2-raw-v1",
             stride=1024,
         )
-        logging.info(f"Teacher model {i+1} ppl: {ppl:.3f}")
+        logging.info(f"Teacher model {i} ppl: {ppl:.3f}")
 
         # test_encodings = utils.load_and_tokenize_dataset(
         #     DATA_DIR + "datasets/wikitext",
@@ -290,3 +290,15 @@ def main(model_path, trainable_attention=False):
             torch.cuda.empty_cache()  # Clear CUDA cache
         # make current student the new teacher
         teacher_model = student_model
+
+    # compute the final student model ppl
+    ppl = utils.calculate_perplexity(
+        teacher_model,
+        DATA_DIR + "datasets/wikitext",
+        "test",
+        tokenizer,
+        dataset_name="wikitext-103-raw-v1",
+        # dataset_name="wikitext-2-raw-v1",
+        stride=1024,
+    )
+    logging.info(f"Teacher model {i} ppl: {ppl:.3f}")
