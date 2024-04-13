@@ -44,7 +44,6 @@ class MatryoshkaMLP(nn.Module):
                 x, weight_fc.T, bias_fc
             )  # Using F.linear because GPT-2 uses linear mappings reshaped, not actual Conv1D
             x = self.original_mlp.act(x)
-            x = self.original_mlp.dropout(x)  # Apply dropout after activation
 
             # Adjust the weights for the c_proj layer
             weight_proj = self.original_mlp.c_proj.weight[:CURRENT_MATRYOSHKA_SIZE, :]
@@ -76,28 +75,29 @@ def get_student_model_mlp_loss(student_model, input_ids, teacher_mlp_output, los
 
     loss1 = loss_fn(full_student_output, teacher_mlp_output)
     loss2 = loss_fn(small_student_output, teacher_mlp_output)
+
     return loss1 + loss2
 
 
-def copy_smaller_mlp(student_model, layer_id):
-    # we have trained the Matryoshka layer, now remove it with the smaller MLP
-    new_mlp = nn.Sequential(
-        nn.Linear(2048, MATRYOSHKA_SIZE, bias=True),
-        nn.GELU(),
-        nn.Linear(MATRYOSHKA_SIZE, 2048, bias=True),
-    )
-    learned_mlp = student_model.transformer.h[layer_id].mlp
+# def copy_smaller_mlp(student_model, layer_id):
+#     # we have trained the Matryoshka layer, now remove it with the smaller MLP
+#     new_mlp = nn.Sequential(
+#         nn.Linear(768, MATRYOSHKA_SIZE, bias=True),
+#         nn.GELU(),
+#         nn.Linear(MATRYOSHKA_SIZE, 768, bias=True),
+#     )
+#     learned_mlp = student_model.transformer.h[layer_id].mlp
 
-    new_mlp[0].weight.data = learned_mlp.original_mlp.c_fc.weight[
-        :MATRYOSHKA_SIZE, :
-    ].data
-    new_mlp[0].bias.data = learned_mlp.original_mlp.c_fc.bias[:MATRYOSHKA_SIZE].data
+#     new_mlp[0].weight.data = learned_mlp.original_mlp.c_fc.weight[
+#         :MATRYOSHKA_SIZE, :
+#     ].data
+#     new_mlp[0].bias.data = learned_mlp.original_mlp.c_fc.bias[:MATRYOSHKA_SIZE].data
 
-    new_mlp[2].weight.data = learned_mlp.original_mlp.c_proj.weight[
-        :, :MATRYOSHKA_SIZE
-    ].data
-    new_mlp[2].bias.data = learned_mlp.original_mlp.c_proj.bias.data
-    return new_mlp
+#     new_mlp[2].weight.data = learned_mlp.original_mlp.c_proj.weight[
+#         :, :MATRYOSHKA_SIZE
+#     ].data
+#     new_mlp[2].bias.data = learned_mlp.original_mlp.c_proj.bias.data
+#     return new_mlp
 
 
 def train(
@@ -140,12 +140,12 @@ def train(
                 param.requires_grad = False
 
     # Register hooks to capture outputs from the teacher and student MLPs
-    teacher_hook = teacher_model.transformer.h[
-        layer_id
-    ].mlp.c_proj.register_forward_hook(extract_mlp_output_hook)
-    student_hook = student_model.transformer.h[
-        layer_id
-    ].mlp.original_mlp.c_proj.register_forward_hook(extract_mlp_output_hook)
+    teacher_hook = teacher_model.transformer.h[layer_id].mlp.register_forward_hook(
+        extract_mlp_output_hook
+    )
+    student_hook = student_model.transformer.h[layer_id].mlp.register_forward_hook(
+        extract_mlp_output_hook
+    )
 
     teacher_model.eval()
     student_model.train()
@@ -162,7 +162,6 @@ def train(
         for encoding in token_encodings:
             try:
                 batch = encoding.to(device)
-
                 optimizer.zero_grad()
 
                 # Process the teacher model's output
@@ -218,7 +217,6 @@ def train(
 
     # reduce precision again to save memory
     student_model = student_model.to(device).to(MODEL_PRECISION)
-
     return student_model
 
 
@@ -243,7 +241,7 @@ def main(model_path, trainable_attention=False):
             "train",
             tokenizer,
             max_length=1024,
-            batch_size=96,
+            batch_size=64,
             # dataset_name="wikitext-2-raw-v1",
         )
 
@@ -277,7 +275,7 @@ def main(model_path, trainable_attention=False):
             epochs=1,
             lr=0.0004,
             trainable_attention=trainable_attention,
-        ).to(MODEL_PRECISION)
+        )
 
         # Save the model state dictionary
         torch.save(
