@@ -241,7 +241,7 @@ def main(model_path, trainable_attention=False):
             "train",
             tokenizer,
             max_length=1024,
-            batch_size=64,
+            batch_size=16,
             # dataset_name="wikitext-2-raw-v1",
         )
 
@@ -275,7 +275,7 @@ def main(model_path, trainable_attention=False):
             epochs=1,
             lr=0.0004,
             trainable_attention=trainable_attention,
-        )
+        ).to(MODEL_PRECISION)
 
         # Save the model state dictionary
         torch.save(
