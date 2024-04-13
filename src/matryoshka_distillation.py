@@ -234,29 +234,40 @@ def main(model_path, trainable_attention=False):
     else:
         logging.info("mlp layers will be trained.")
 
-    # Load the dataset
-    train_encodings = utils.load_and_tokenize_dataset(
-        DATA_DIR + "datasets/openwebtext",
-        "train",
-        tokenizer,
-        max_length=1024,
-        batch_size=96,
-        # dataset_name="wikitext-2-raw-v1",
-    )
-
-    test_encodings = utils.load_and_tokenize_dataset(
-        DATA_DIR + "datasets/wikitext",
-        "test",
-        tokenizer,
-        max_length=1024,
-        dataset_name="wikitext-103-raw-v1",
-        batch_size=1,
-    )
-
     n_layers = len(teacher_model.transformer.h)
 
     for i in range(n_layers - 1, -1, -1):
-        logging.info(f"Training student model {n_layers - 1 - i}.")
+        # Load the dataset each time cause it's a generator under the hood
+        train_encodings = utils.load_and_tokenize_dataset(
+            DATA_DIR + "datasets/openwebtext",
+            "train",
+            tokenizer,
+            max_length=1024,
+            batch_size=96,
+            # dataset_name="wikitext-2-raw-v1",
+        )
+
+        ppl = utils.calculate_perplexity(
+            teacher_model,
+            DATA_DIR + "datasets/wikitext",
+            "test",
+            tokenizer,
+            dataset_name="wikitext-103-raw-v1",
+            # dataset_name="wikitext-2-raw-v1",
+            stride=1024,
+        )
+        logging.info(f"Teacher model {i+1} ppl: {ppl:.3f}")
+
+        # test_encodings = utils.load_and_tokenize_dataset(
+        #     DATA_DIR + "datasets/wikitext",
+        #     "test",
+        #     tokenizer,
+        #     max_length=1024,
+        #     dataset_name="wikitext-103-raw-v1",
+        #     batch_size=1,
+        # )
+
+        logging.info(f"Training student model {i}.")
         # student model's i-th layer's MLP has been shrunk and rest of the layers are identical to teacher model.
         # we can use this student model to train the next student model whose next layer will be shrunk
         student_model = train(
@@ -273,9 +284,6 @@ def main(model_path, trainable_attention=False):
             student_model,
             DATA_DIR + model_path + f"_matryoshka_student_{i}.pth",
         )
-
-        ppl = utils.calculate_perplexity(student_model, test_encodings)
-        logging.info(f"Student model {i} ppl: {ppl:.3f}")
 
         # delete current teacher which we don't need anymore
         del teacher_model

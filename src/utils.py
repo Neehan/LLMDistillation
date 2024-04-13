@@ -137,34 +137,51 @@ def load_and_tokenize_dataset(
                 start = end
 
 
-def calculate_perplexity(model, encodings):
-    model.seqlen = 1024
-    model = model.eval()
+def calculate_perplexity(
+    model,
+    path,
+    split,
+    tokenizer,
+    dataset_name=None,
+    stride=1024,
+):
+    if dataset_name is None:
+        logging.info(f"computing perplexity on {path}/{split}")
+    else:
+        logging.info(f"computing perplexity on {path}/{dataset_name}/{split}")
+    dataset = datasets.load_dataset(path, dataset_name, split=split)
+    concatenated_text = "\n\n".join(
+        dataset["text"]
+    )  # Concatenate all texts with separator
+    encodings = tokenizer(concatenated_text, return_tensors="pt")
+
+    max_length = model.config.n_positions
+    seq_len = encodings.input_ids.size(1)
+
     nlls = []
-
-    nsamples = 0
-
-    for batch in tqdm(
-        encodings,
-        desc="computing ppl...",
+    prev_end_loc = 0
+    for begin_loc in tqdm(
+        range(0, seq_len, stride),
+        desc="computing perplexity",
         file=TQDM_OUTPUT,
         dynamic_ncols=True,
         mininterval=5 * 60,  # seconds between two updates
     ):
-        batch = batch.to(model.device)
-        nsamples += batch.shape[1]
+        end_loc = min(begin_loc + max_length, seq_len)
+        trg_len = end_loc - prev_end_loc  # may be different from stride on last loop
+        input_ids = encodings.input_ids[:, begin_loc:end_loc].to(model.device)
+        target_ids = input_ids.clone()
+        target_ids[:, :-trg_len] = -100
 
         with torch.no_grad():
-            outputs = model(input_ids=batch)
-            lm_logits = outputs.logits
-        shift_logits = lm_logits[:, :-1, :].contiguous().float()
-        shift_labels = batch[:, 1:]
-        loss_fct = nn.CrossEntropyLoss()
-        loss = loss_fct(
-            shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1)
-        )
-        neg_log_likelihood = loss.float() * model.seqlen
+            outputs = model(input_ids, labels=target_ids)
+            neg_log_likelihood = outputs.loss
+
         nlls.append(neg_log_likelihood)
 
-    ppl = torch.exp(torch.stack(nlls).sum() / (nsamples * model.seqlen)).item()
+        prev_end_loc = end_loc
+        if end_loc == seq_len:
+            break
+
+    ppl = torch.exp(torch.stack(nlls).mean())
     return ppl
