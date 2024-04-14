@@ -15,27 +15,28 @@ MLP_OUTPUT = None
 
 MATRYOSHKA_SIZE = 1536
 # Global variable to control the size of MLP
-CURRENT_MATRYOSHKA_SIZE = None  # None implies use the full model
+CURRENT_MATRYOSHKA_SIZE = [None] * 12  # None implies use the full model
 
 
 class MatryoshkaMLP(nn.Module):
-    def __init__(self, original_mlp):
+    def __init__(self, original_mlp, layer_id):
         super(MatryoshkaMLP, self).__init__()
         self.original_mlp = original_mlp
+        self.layer_id = layer_id
 
     def forward(self, x):
-        global CURRENT_MATRYOSHKA_SIZE
-        if CURRENT_MATRYOSHKA_SIZE is not None:
+        distilled_hidden_size = CURRENT_MATRYOSHKA_SIZE[self.layer_id]
+        if distilled_hidden_size is not None:
             # Ensure the current size is within the allowed dimensions
             hidden_dim = self.original_mlp.c_fc.weight.shape[1]
             assert (
-                CURRENT_MATRYOSHKA_SIZE <= hidden_dim
-            ), f"CURRENT_MATRYOSHKA_SIZE too large ({CURRENT_MATRYOSHKA_SIZE} <= {hidden_dim})"
+                distilled_hidden_size <= hidden_dim
+            ), f"distilled_hidden_size too large ({distilled_hidden_size} <= {hidden_dim})"
 
             # Adjust the weights and biases for the c_fc layer
-            weight_fc = self.original_mlp.c_fc.weight[:, :CURRENT_MATRYOSHKA_SIZE]
+            weight_fc = self.original_mlp.c_fc.weight[:, :distilled_hidden_size]
             bias_fc = (
-                self.original_mlp.c_fc.bias[:CURRENT_MATRYOSHKA_SIZE]
+                self.original_mlp.c_fc.bias[:distilled_hidden_size]
                 if self.original_mlp.c_fc.bias is not None
                 else None
             )
@@ -46,7 +47,7 @@ class MatryoshkaMLP(nn.Module):
             x = self.original_mlp.act(x)
 
             # Adjust the weights for the c_proj layer
-            weight_proj = self.original_mlp.c_proj.weight[:CURRENT_MATRYOSHKA_SIZE, :]
+            weight_proj = self.original_mlp.c_proj.weight[:distilled_hidden_size, :]
             bias_proj = self.original_mlp.c_proj.bias
 
             # Apply the second projection layer
@@ -63,41 +64,27 @@ def extract_mlp_output_hook(module, input, output):
     MLP_OUTPUT = output
 
 
-def get_student_model_mlp_loss(student_model, input_ids, teacher_mlp_output, loss_fn):
-    global CURRENT_MATRYOSHKA_SIZE
-    CURRENT_MATRYOSHKA_SIZE = None
+def get_student_model_mlp_loss(
+    student_model, layer_id, input_ids, teacher_mlp_output, loss_fn
+):
+
+    # get output with full sized hidden
+    CURRENT_MATRYOSHKA_SIZE[layer_id] = None
     student_model(input_ids=input_ids)
     full_student_output = MLP_OUTPUT
 
-    CURRENT_MATRYOSHKA_SIZE = MATRYOSHKA_SIZE
+    # get output with small sized hidden on only layer_id
+    CURRENT_MATRYOSHKA_SIZE[layer_id] = MATRYOSHKA_SIZE
     student_model(input_ids=input_ids)
     small_student_output = MLP_OUTPUT
+
+    # revert to full sized hidden
+    CURRENT_MATRYOSHKA_SIZE[layer_id] = None
 
     loss1 = loss_fn(full_student_output, teacher_mlp_output)
     loss2 = loss_fn(small_student_output, teacher_mlp_output)
 
     return loss1 + loss2
-
-
-# def copy_smaller_mlp(student_model, layer_id):
-#     # we have trained the Matryoshka layer, now remove it with the smaller MLP
-#     new_mlp = nn.Sequential(
-#         nn.Linear(768, MATRYOSHKA_SIZE, bias=True),
-#         nn.GELU(),
-#         nn.Linear(MATRYOSHKA_SIZE, 768, bias=True),
-#     )
-#     learned_mlp = student_model.transformer.h[layer_id].mlp
-
-#     new_mlp[0].weight.data = learned_mlp.original_mlp.c_fc.weight[
-#         :MATRYOSHKA_SIZE, :
-#     ].data
-#     new_mlp[0].bias.data = learned_mlp.original_mlp.c_fc.bias[:MATRYOSHKA_SIZE].data
-
-#     new_mlp[2].weight.data = learned_mlp.original_mlp.c_proj.weight[
-#         :, :MATRYOSHKA_SIZE
-#     ].data
-#     new_mlp[2].bias.data = learned_mlp.original_mlp.c_proj.bias.data
-#     return new_mlp
 
 
 def train(
@@ -113,31 +100,15 @@ def train(
 
     student_model = copy.deepcopy(teacher_model)
     student_model.transformer.h[layer_id].mlp = (
-        MatryoshkaMLP(student_model.transformer.h[layer_id].mlp)
+        MatryoshkaMLP(student_model.transformer.h[layer_id].mlp, layer_id)
         .to(device)
         .to(torch.float32)
     )
 
-    if trainable_attention:
-        student_model.transformer.h[layer_id].self_attn = student_model.transformer.h[
-            layer_id
-        ].self_attn.to(torch.float32)
-
-        # saves memory by forgetting activations during forward pass
-        student_model.gradient_checkpointing_enable()
-
-        # Disable gradient updates for all parameters except for layer_id
-        for name, param in student_model.named_parameters():
-            if (
-                f"transformer.h.{layer_id}.mlp" not in name
-                and f"transformer.h.{layer_id}.self_attn" not in name
-            ):
-                param.requires_grad = False
-    else:
-        # Disable gradient updates for all parameters except for the MLP
-        for name, param in student_model.named_parameters():
-            if f"transformer.h.{layer_id}.mlp" not in name:
-                param.requires_grad = False
+    # Disable gradient updates for all parameters except for the MLP
+    for name, param in student_model.named_parameters():
+        if f"transformer.h.{layer_id}.mlp" not in name:
+            param.requires_grad = False
 
     # Register hooks to capture outputs from the teacher and student MLPs
     teacher_hook = teacher_model.transformer.h[layer_id].mlp.register_forward_hook(
@@ -157,63 +128,58 @@ def train(
     if torch.cuda.is_available():
         scaler = GradScaler()  # Initialize the GradScaler for handling mixed precision
 
-    for epoch in range(epochs):
-        losses = []
-        for encoding in token_encodings:
-            try:
-                batch = encoding.to(device)
-                optimizer.zero_grad()
+    # for epoch in range(epochs):
+    #     losses = []
+    #     for encoding in token_encodings:
+    #         try:
+    #             batch = encoding.to(device)
+    #             optimizer.zero_grad()
 
-                # Process the teacher model's output
-                with torch.no_grad():
-                    teacher_model(input_ids=batch)
-                    teacher_mlp_output = MLP_OUTPUT
+    #             # Process the teacher model's output
+    #             with torch.no_grad():
+    #                 teacher_model(input_ids=batch)
+    #                 teacher_mlp_output = MLP_OUTPUT
 
-                if torch.cuda.is_available():
-                    # Use autocast for the forward pass to manage mixed precision
-                    with autocast():
-                        loss = get_student_model_mlp_loss(
-                            student_model, batch, teacher_mlp_output, loss_fn
-                        )
+    #             if torch.cuda.is_available():
+    #                 # Use autocast for the forward pass to manage mixed precision
+    #                 with autocast():
+    #                     loss = get_student_model_mlp_loss(
+    #                         student_model, layer_id, batch, teacher_mlp_output, loss_fn
+    #                     )
 
-                    # Scale loss and backward
-                    scaler.scale(loss).backward()
-                    scaler.step(optimizer)
-                    scaler.update()
-                else:
-                    loss = get_student_model_mlp_loss(
-                        student_model, batch, teacher_mlp_output, loss_fn
-                    )
-                    loss.backward()
-                    optimizer.step()
+    #                 # Scale loss and backward
+    #                 scaler.scale(loss).backward()
+    #                 scaler.step(optimizer)
+    #                 scaler.update()
+    #             else:
+    #                 loss = get_student_model_mlp_loss(
+    #                     student_model, layer_id, batch, teacher_mlp_output, loss_fn
+    #                 )
+    #                 loss.backward()
+    #                 optimizer.step()
 
-                losses.append(loss.item())
+    #             losses.append(loss.item())
 
-            except Exception as e:
-                logging.error("GOT AN EXCEPTION")
-                logging.error(e)
-                # remove hooks to prevent memory leaks
-                teacher_hook.remove()
-                student_hook.remove()
-                raise e
+    #         except Exception as e:
+    #             logging.error("GOT AN EXCEPTION")
+    #             logging.error(e)
+    #             # remove hooks to prevent memory leaks
+    #             teacher_hook.remove()
+    #             student_hook.remove()
+    #             raise e
 
-        avg_loss = sum(losses) / len(losses)
-        logging.info(f"Average Loss: {avg_loss}")
+    #     avg_loss = sum(losses) / len(losses)
+    #     logging.info(f"Average Loss: {avg_loss}")
 
     # remove hooks to prevent memory leaks
     teacher_hook.remove()
     student_hook.remove()
 
-    # student_model.transformer.h[layer_id].mlp = copy_smaller_mlp(
-    #     student_model, layer_id
-    # )
-    # training is done
     # have the student model same set of training params as teacher
-    # Assuming teacher_model and student_model are your model instances
     for teacher_param, student_param in zip(
-        teacher_model.parameters(), student_model.parameters()
+        teacher_model.named_parameters(), student_model.named_parameters()
     ):
-        student_param.requires_grad = teacher_param.requires_grad
+        student_param[1].requires_grad = teacher_param[1].requires_grad
 
     # reduce precision again to save memory
     student_model = student_model.to(device).to(MODEL_PRECISION)
@@ -245,6 +211,10 @@ def main(model_path, trainable_attention=False):
             # dataset_name="wikitext-2-raw-v1",
         )
 
+        # make the teacher get output using smaller hidden size
+        for j in range(i, n_layers - 1):
+            CURRENT_MATRYOSHKA_SIZE[j] = MATRYOSHKA_SIZE
+
         ppl = utils.calculate_perplexity(
             teacher_model,
             # DATA_DIR + "datasets/wikitext",
@@ -258,16 +228,12 @@ def main(model_path, trainable_attention=False):
         )
         logging.info(f"Teacher model {i} ppl: {ppl:.3f}")
 
-        # test_encodings = utils.load_and_tokenize_dataset(
-        #     DATA_DIR + "datasets/wikitext",
-        #     "test",
-        #     tokenizer,
-        #     max_length=1024,
-        #     dataset_name="wikitext-103-raw-v1",
-        #     batch_size=1,
-        # )
+        # revert the changes
+        for j in range(i, n_layers - 1):
+            CURRENT_MATRYOSHKA_SIZE[j] = None
 
         logging.info(f"Training student model {i}.")
+
         # student model's i-th layer's MLP has been shrunk and rest of the layers are identical to teacher model.
         # we can use this student model to train the next student model whose next layer will be shrunk
         student_model = train(
@@ -277,7 +243,7 @@ def main(model_path, trainable_attention=False):
             epochs=1,
             lr=0.0004,
             trainable_attention=trainable_attention,
-        ).to(MODEL_PRECISION)
+        )
 
         # Save the model state dictionary
         torch.save(
@@ -292,6 +258,9 @@ def main(model_path, trainable_attention=False):
             torch.cuda.empty_cache()  # Clear CUDA cache
         # make current student the new teacher
         teacher_model = student_model
+
+    for j in range(n_layers - 1):
+        CURRENT_MATRYOSHKA_SIZE[j] = None
 
     # compute the final student model ppl
     ppl = utils.calculate_perplexity(
