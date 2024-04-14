@@ -156,7 +156,7 @@ def calculate_perplexity(
     # encodings = tokenizer(concatenated_text, return_tensors="pt")
 
     encodings_dir = os.path.join(path, "encodings")
-    chunks = sorted(os.listdir(encodings_dir))[start_index::25]
+    chunks = sorted(os.listdir(encodings_dir))[start_index::100]
 
     max_length = model.config.n_positions
     nlls = []
