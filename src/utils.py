@@ -1,11 +1,9 @@
 import torch
-import torch.nn as nn
 from tqdm import tqdm
 
 import datasets
 from constants import *
 from transformers import AutoModelForCausalLM, AutoTokenizer
-import pandas as pd
 
 
 def load_model_and_tokenizer(path):
@@ -67,12 +65,12 @@ def prepare_and_save_chunks(path, split, tokenizer, dataset_name=None):
     for example in tqdm(
         dataset,
         desc="Tokenizing Dataset",
-        mininterval=3 * 60,
+        mininterval=MIN_INTERVAL_SEC,
+        file=TQDM_OUTPUT,
     ):
         large_text.append(example["text"])
         word_count += len(example["text"].split())
-        # Check if the accumulated texts are roughly 500 MB in size (assuming ~1 byte per char)
-        if word_count >= 64 * 64 * 1024:  # Approx 500MB
+        if word_count >= 64 * 64 * 1024:  # Approx 4M words
             concatenated_text = "\n\n".join(large_text)
             encoded_chunk = tokenizer(
                 concatenated_text, return_tensors="pt", padding=False, truncation=False
@@ -96,7 +94,13 @@ def prepare_and_save_chunks(path, split, tokenizer, dataset_name=None):
 
 
 def load_and_tokenize_dataset(
-    path, split, tokenizer, max_length=1024, dataset_name=None, batch_size=128
+    path,
+    split,
+    tokenizer,
+    max_length=1024,
+    dataset_name=None,
+    batch_size=128,
+    start_index=0,
 ):
     """
     Yields smaller batches of tokens from pre-tokenized and saved chunks.
@@ -116,12 +120,12 @@ def load_and_tokenize_dataset(
 
     # keep one out of 25 cause dataset is huge
     if "openwebtext" in path:
-        chunks = list(chunks)[0::25]
+        chunks = list(chunks)[start_index::25]
 
     for chunk_file in tqdm(
         chunks,
         desc="Training",
-        mininterval=15 * 60,
+        mininterval=MIN_INTERVAL_SEC,
         file=TQDM_OUTPUT,
     ):
         if chunk_file.startswith(f"{split}_chunk") and chunk_file.endswith(".pt"):
@@ -138,50 +142,54 @@ def load_and_tokenize_dataset(
 
 
 def calculate_perplexity(
-    model,
-    path,
-    split,
-    tokenizer,
-    dataset_name=None,
-    stride=1024,
+    model, path, split, tokenizer, dataset_name=None, stride=1024, start_index=1
 ):
     if dataset_name is None:
         logging.info(f"computing perplexity on {path}/{split}")
     else:
         logging.info(f"computing perplexity on {path}/{dataset_name}/{split}")
-    dataset = datasets.load_dataset(path, dataset_name, split=split)
-    concatenated_text = "\n\n".join(
-        dataset["text"]
-    )  # Concatenate all texts with separator
-    encodings = tokenizer(concatenated_text, return_tensors="pt")
+
+    # dataset = datasets.load_dataset(path, dataset_name, split=split)
+    # concatenated_text = "\n\n".join(
+    #     dataset["text"]
+    # )  # Concatenate all texts with separator
+    # encodings = tokenizer(concatenated_text, return_tensors="pt")
+
+    encodings_dir = os.path.join(path, "encodings")
+    chunks = sorted(os.listdir(encodings_dir))[start_index::25]
 
     max_length = model.config.n_positions
-    seq_len = encodings.input_ids.size(1)
-
     nlls = []
-    prev_end_loc = 0
-    for begin_loc in tqdm(
-        range(0, seq_len, stride),
-        desc="computing perplexity",
+
+    for chunk_file in tqdm(
+        chunks,
+        desc="Computing Perplexity",
+        mininterval=MIN_INTERVAL_SEC,
         file=TQDM_OUTPUT,
-        dynamic_ncols=True,
-        mininterval=5 * 60,  # seconds between two updates
     ):
-        end_loc = min(begin_loc + max_length, seq_len)
-        trg_len = end_loc - prev_end_loc  # may be different from stride on last loop
-        input_ids = encodings.input_ids[:, begin_loc:end_loc].to(model.device)
-        target_ids = input_ids.clone()
-        target_ids[:, :-trg_len] = -100
+        if chunk_file.startswith(f"{split}_chunk") and chunk_file.endswith(".pt"):
+            chunk_path = os.path.join(encodings_dir, chunk_file)
+            encodings = torch.load(chunk_path)
+            seq_len = encodings.input_ids.size(1)
+            prev_end_loc = 0
+            for begin_loc in range(0, seq_len, stride):
+                end_loc = min(begin_loc + max_length, seq_len)
+                trg_len = (
+                    end_loc - prev_end_loc
+                )  # may be different from stride on last loop
+                input_ids = encodings.input_ids[:, begin_loc:end_loc].to(model.device)
+                target_ids = input_ids.clone()
+                target_ids[:, :-trg_len] = -100
 
-        with torch.no_grad():
-            outputs = model(input_ids, labels=target_ids)
-            neg_log_likelihood = outputs.loss
+                with torch.no_grad():
+                    outputs = model(input_ids, labels=target_ids)
+                    neg_log_likelihood = outputs.loss
 
-        nlls.append(neg_log_likelihood)
+                nlls.append(neg_log_likelihood)
 
-        prev_end_loc = end_loc
-        if end_loc == seq_len:
-            break
+                prev_end_loc = end_loc
+                if end_loc == seq_len:
+                    break
 
     ppl = torch.exp(torch.stack(nlls).mean())
     return ppl

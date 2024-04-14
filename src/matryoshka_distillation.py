@@ -234,7 +234,7 @@ def main(model_path, trainable_attention=False):
 
     n_layers = len(teacher_model.transformer.h)
 
-    for i in range(n_layers):
+    for i in range(n_layers - 1, -1, -1):
         # Load the dataset each time cause it's a generator under the hood
         train_encodings = utils.load_and_tokenize_dataset(
             DATA_DIR + "datasets/openwebtext",
@@ -247,12 +247,14 @@ def main(model_path, trainable_attention=False):
 
         ppl = utils.calculate_perplexity(
             teacher_model,
-            DATA_DIR + "datasets/wikitext",
-            "test",
+            # DATA_DIR + "datasets/wikitext",
+            DATA_DIR + "datasets/openwebtext",
+            "train",
             tokenizer,
-            dataset_name="wikitext-103-raw-v1",
+            # dataset_name="wikitext-103-raw-v1",
             # dataset_name="wikitext-2-raw-v1",
             stride=1024,
+            start_index=1,
         )
         logging.info(f"Teacher model {i} ppl: {ppl:.3f}")
 
@@ -294,11 +296,10 @@ def main(model_path, trainable_attention=False):
     # compute the final student model ppl
     ppl = utils.calculate_perplexity(
         teacher_model,
-        DATA_DIR + "datasets/wikitext",
-        "test",
+        DATA_DIR + "datasets/openwebtext",
+        "train",
         tokenizer,
-        dataset_name="wikitext-103-raw-v1",
-        # dataset_name="wikitext-2-raw-v1",
         stride=1024,
+        start_index=1,
     )
     logging.info(f"Teacher model {i} ppl: {ppl:.3f}")
