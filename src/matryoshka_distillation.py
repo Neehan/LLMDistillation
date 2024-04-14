@@ -128,48 +128,48 @@ def train(
     if torch.cuda.is_available():
         scaler = GradScaler()  # Initialize the GradScaler for handling mixed precision
 
-    # for epoch in range(epochs):
-    #     losses = []
-    #     for encoding in token_encodings:
-    #         try:
-    #             batch = encoding.to(device)
-    #             optimizer.zero_grad()
+    for epoch in range(epochs):
+        losses = []
+        for encoding in token_encodings:
+            try:
+                batch = encoding.to(device)
+                optimizer.zero_grad()
 
-    #             # Process the teacher model's output
-    #             with torch.no_grad():
-    #                 teacher_model(input_ids=batch)
-    #                 teacher_mlp_output = MLP_OUTPUT
+                # Process the teacher model's output
+                with torch.no_grad():
+                    teacher_model(input_ids=batch)
+                    teacher_mlp_output = MLP_OUTPUT
 
-    #             if torch.cuda.is_available():
-    #                 # Use autocast for the forward pass to manage mixed precision
-    #                 with autocast():
-    #                     loss = get_student_model_mlp_loss(
-    #                         student_model, layer_id, batch, teacher_mlp_output, loss_fn
-    #                     )
+                if torch.cuda.is_available():
+                    # Use autocast for the forward pass to manage mixed precision
+                    with autocast():
+                        loss = get_student_model_mlp_loss(
+                            student_model, layer_id, batch, teacher_mlp_output, loss_fn
+                        )
 
-    #                 # Scale loss and backward
-    #                 scaler.scale(loss).backward()
-    #                 scaler.step(optimizer)
-    #                 scaler.update()
-    #             else:
-    #                 loss = get_student_model_mlp_loss(
-    #                     student_model, layer_id, batch, teacher_mlp_output, loss_fn
-    #                 )
-    #                 loss.backward()
-    #                 optimizer.step()
+                    # Scale loss and backward
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    loss = get_student_model_mlp_loss(
+                        student_model, layer_id, batch, teacher_mlp_output, loss_fn
+                    )
+                    loss.backward()
+                    optimizer.step()
 
-    #             losses.append(loss.item())
+                losses.append(loss.item())
 
-    #         except Exception as e:
-    #             logging.error("GOT AN EXCEPTION")
-    #             logging.error(e)
-    #             # remove hooks to prevent memory leaks
-    #             teacher_hook.remove()
-    #             student_hook.remove()
-    #             raise e
+            except Exception as e:
+                logging.error("GOT AN EXCEPTION")
+                logging.error(e)
+                # remove hooks to prevent memory leaks
+                teacher_hook.remove()
+                student_hook.remove()
+                raise e
 
-    #     avg_loss = sum(losses) / len(losses)
-    #     logging.info(f"Average Loss: {avg_loss}")
+        avg_loss = sum(losses) / len(losses)
+        logging.info(f"Average Loss: {avg_loss}")
 
     # remove hooks to prevent memory leaks
     teacher_hook.remove()
