@@ -65,17 +65,22 @@ def extract_mlp_output_hook(module, input, output):
 
 
 def get_student_model_mlp_loss(
-    student_model, layer_id, input_ids, teacher_mlp_output, loss_fn
+    student_model,
+    layer_id,
+    input_ids,
+    teacher_mlp_output,
+    teacher_model_logits,
+    loss_fn,
 ):
 
     # get output with full sized hidden
     CURRENT_MATRYOSHKA_SIZE[layer_id] = None
-    student_model(input_ids=input_ids)
+    full_student_model_logits = student_model(input_ids=input_ids).logits
     full_student_output = MLP_OUTPUT
 
     # get output with small sized hidden on only layer_id
     CURRENT_MATRYOSHKA_SIZE[layer_id] = MATRYOSHKA_SIZE
-    student_model(input_ids=input_ids)
+    small_student_model_logits = student_model(input_ids=input_ids).logits
     small_student_output = MLP_OUTPUT
 
     # revert to full sized hidden
@@ -84,7 +89,16 @@ def get_student_model_mlp_loss(
     loss1 = loss_fn(full_student_output, teacher_mlp_output)
     loss2 = loss_fn(small_student_output, teacher_mlp_output)
 
-    return loss1 + loss2
+    # also add final two layers outputs
+    loss3 = loss_fn(teacher_model_logits, full_student_model_logits)
+    loss4 = loss_fn(teacher_model_logits, small_student_model_logits)
+
+    # print("loss1", loss1.item())
+    # print("loss2", loss2.item())
+    # print("loss3", loss3.item())
+    # print("loss4", loss4.item())
+
+    return loss1 + loss2 + (loss3 + loss4) * 0.01
 
 
 def train(
@@ -137,14 +151,19 @@ def train(
 
                 # Process the teacher model's output
                 with torch.no_grad():
-                    teacher_model(input_ids=batch)
+                    teacher_model_logits = teacher_model(input_ids=batch).logits
                     teacher_mlp_output = MLP_OUTPUT
 
                 if torch.cuda.is_available():
                     # Use autocast for the forward pass to manage mixed precision
                     with autocast():
                         loss = get_student_model_mlp_loss(
-                            student_model, layer_id, batch, teacher_mlp_output, loss_fn
+                            student_model,
+                            layer_id,
+                            batch,
+                            teacher_mlp_output,
+                            teacher_model_logits,
+                            loss_fn,
                         )
 
                     # Scale loss and backward
@@ -153,7 +172,12 @@ def train(
                     scaler.update()
                 else:
                     loss = get_student_model_mlp_loss(
-                        student_model, layer_id, batch, teacher_mlp_output, loss_fn
+                        student_model,
+                        layer_id,
+                        batch,
+                        teacher_mlp_output,
+                        teacher_model_logits,
+                        loss_fn,
                     )
                     loss.backward()
                     optimizer.step()
@@ -207,7 +231,7 @@ def main(model_path, trainable_attention=False):
             "train",
             tokenizer,
             max_length=1024,
-            batch_size=16,
+            batch_size=2,
             # dataset_name="wikitext-2-raw-v1",
         )
 
