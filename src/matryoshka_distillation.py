@@ -120,7 +120,7 @@ def train(
 
     # Disable gradient updates for all parameters except for the MLP
     for name, param in student_model.named_parameters():
-        if f"transformer.h.{layer_id}.mlp" not in name:
+        if f"gpt_neox.layers.{layer_id}.mlp" not in name:
             param.requires_grad = False
 
     # Register hooks to capture outputs from the teacher and student MLPs
