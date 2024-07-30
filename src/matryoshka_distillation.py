@@ -251,7 +251,7 @@ def main(model_path, trainable_attention=False):
         # )
         utils.load_and_tokenize_dataset(
             DATA_DIR + "datasets/python-github-code",
-            None,
+            "train",
             tokenizer,
             max_length=1024,
             batch_size=2 if TEST_ENV else 16,
