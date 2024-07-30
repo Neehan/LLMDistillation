@@ -112,8 +112,8 @@ def train(
     teacher_model = teacher_model.to(MODEL_PRECISION)
 
     student_model = copy.deepcopy(teacher_model)
-    student_model.transformer.h[layer_id].mlp = (
-        MatryoshkaMLP(student_model.transformer.h[layer_id].mlp, layer_id)
+    student_model.gpt_neox.layers[layer_id].mlp = (
+        MatryoshkaMLP(student_model.gpt_neox.layers[layer_id].mlp, layer_id)
         .to(device)
         .to(torch.float32)
     )
@@ -124,10 +124,10 @@ def train(
             param.requires_grad = False
 
     # Register hooks to capture outputs from the teacher and student MLPs
-    teacher_hook = teacher_model.transformer.h[layer_id].mlp.register_forward_hook(
+    teacher_hook = teacher_model.gpt_neox.layers[layer_id].mlp.register_forward_hook(
         extract_mlp_output_hook
     )
-    student_hook = student_model.transformer.h[layer_id].mlp.register_forward_hook(
+    student_hook = student_model.gpt_neox.layers[layer_id].mlp.register_forward_hook(
         extract_mlp_output_hook
     )
 
