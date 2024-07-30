@@ -250,12 +250,12 @@ def main(model_path, trainable_attention=False):
         #     dataset_name="EleutherAI/pile",
         # )
         utils.load_and_tokenize_dataset(
-            DATA_DIR + "datasets/github",
+            DATA_DIR + "datasets/python-github-code",
             None,
             tokenizer,
             max_length=1024,
             batch_size=2 if TEST_ENV else 16,
-            dataset_name="codeparrot/github-code-clean",
+            # dataset_name=,
         )
         logging.info("loaded the dataset")
 
