@@ -229,7 +229,7 @@ def main(model_path, trainable_attention=False):
     """
     teacher_model, tokenizer = utils.load_model_and_tokenizer(DATA_DIR + model_path)
 
-    # print(teacher_model)
+    print(teacher_model)
 
     if trainable_attention:
         logging.info("attn and mlp layers will be trained.")
