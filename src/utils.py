@@ -48,8 +48,8 @@ def prepare_and_save_chunks(path, split, tokenizer, dataset_name=None):
         mininterval=MIN_INTERVAL_SEC,
         file=TQDM_OUTPUT,
     ):
-        large_text.append(example["text"])
-        word_count += len(example["text"].split())
+        large_text.append(example["code"])
+        word_count += len(example["code"].split())
         if word_count >= 64 * 64 * 1024:  # Approx 4M words
             concatenated_text = "\n\n".join(large_text)
             encoded_chunk = tokenizer(
@@ -91,36 +91,35 @@ def load_and_tokenize_dataset(
     """
     logging.info(f"loading dataset from {path}")
     encodings_dir = os.path.join(path, "encodings")
-    print(encodings_dir)
     # Ensure the directory exists before listing contents; if not, prepare the chunks
     if not os.path.exists(encodings_dir) or not os.listdir(encodings_dir):
         logging.info("downloading the datset")
         os.makedirs(encodings_dir, exist_ok=True)
         prepare_and_save_chunks(path, split, tokenizer, dataset_name)
 
-    # chunks = sorted(os.listdir(encodings_dir))  # Ensure chunks are processed in order
+    chunks = sorted(os.listdir(encodings_dir))  # Ensure chunks are processed in order
 
-    # # keep one out of 25 cause dataset is huge
-    # if "openwebtext" in path:
-    #     chunks = list(chunks)[start_index::25]
+    # keep one out of 25 cause dataset is huge
+    if "openwebtext" in path:
+        chunks = list(chunks)[start_index::25]
 
-    # for chunk_file in tqdm(
-    #     chunks,
-    #     desc="Training",
-    #     mininterval=MIN_INTERVAL_SEC,
-    #     file=TQDM_OUTPUT,
-    # ):
-    #     if chunk_file.startswith(f"{split}_chunk") and chunk_file.endswith(".pt"):
-    #         chunk_path = os.path.join(encodings_dir, chunk_file)
-    #         chunk = torch.load(chunk_path)
-    #         input_ids = chunk["input_ids"]
-    #         start = 0
-    #         while start < input_ids.size(1):
-    #             end = start + max_length * batch_size
-    #             if end >= input_ids.size(1):
-    #                 break
-    #             yield input_ids[:, start:end].reshape(batch_size, -1)
-    #             start = end
+    for chunk_file in tqdm(
+        chunks,
+        desc="Training",
+        mininterval=MIN_INTERVAL_SEC,
+        file=TQDM_OUTPUT,
+    ):
+        if chunk_file.startswith(f"{split}_chunk") and chunk_file.endswith(".pt"):
+            chunk_path = os.path.join(encodings_dir, chunk_file)
+            chunk = torch.load(chunk_path)
+            input_ids = chunk["input_ids"]
+            start = 0
+            while start < input_ids.size(1):
+                end = start + max_length * batch_size
+                if end >= input_ids.size(1):
+                    break
+                yield input_ids[:, start:end].reshape(batch_size, -1)
+                start = end
 
 
 def calculate_perplexity(

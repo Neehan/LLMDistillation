@@ -149,8 +149,8 @@ def train(
                 logging.info("calculating intermediate perplexity.")
                 ppl = utils.calculate_perplexity(
                     student_model,
-                    DATA_DIR + "datasets/pile",
-                    "github",
+                    DATA_DIR + "datasets/python-github-code",
+                    "train",
                     tokenizer=None,
                     stride=1024,
                     start_index=1,
@@ -240,16 +240,7 @@ def main(model_path, trainable_attention=False):
 
     for i in range(n_layers - 1, -1, -1):
         # Load the dataset each time cause it's a generator under the hood
-        # train_encodings = utils.load_and_tokenize_dataset(
-        #     DATA_DIR + "datasets/pile",
-        #     "github",
-        #     tokenizer,
-        #     max_length=1024,
-        #     batch_size=2 if TEST_ENV else 16,
-        #     # dataset_name="wikitext-2-raw-v1",
-        #     dataset_name="EleutherAI/pile",
-        # )
-        utils.load_and_tokenize_dataset(
+        train_encodings = utils.load_and_tokenize_dataset(
             DATA_DIR + "datasets/python-github-code",
             "train",
             tokenizer,
@@ -257,6 +248,7 @@ def main(model_path, trainable_attention=False):
             batch_size=2 if TEST_ENV else 16,
             # dataset_name=,
         )
+
         logging.info("loaded the dataset")
 
         # make the teacher get output using smaller hidden size
@@ -266,11 +258,9 @@ def main(model_path, trainable_attention=False):
         ppl = utils.calculate_perplexity(
             teacher_model,
             # DATA_DIR + "datasets/wikitext",
-            DATA_DIR + "datasets/pile",
-            "github",
+            DATA_DIR + "datasets/python-github-code",
+            "train",
             tokenizer,
-            # dataset_name="wikitext-103-raw-v1",
-            # dataset_name="wikitext-2-raw-v1",
             stride=1024,
             start_index=1,
         )
