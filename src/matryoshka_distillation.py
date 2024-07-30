@@ -255,17 +255,6 @@ def main(model_path, trainable_attention=False):
         for j in range(i, n_layers - 1):
             CURRENT_MATRYOSHKA_SIZE[j] = MATRYOSHKA_SIZE
 
-        ppl = utils.calculate_perplexity(
-            teacher_model,
-            # DATA_DIR + "datasets/wikitext",
-            DATA_DIR + "datasets/python-github-code",
-            "train",
-            tokenizer,
-            stride=1024,
-            start_index=1,
-        )
-        logging.info(f"Teacher model {i} ppl: {ppl:.3f}")
-
         # revert the changes
         for j in range(i, n_layers - 1):
             CURRENT_MATRYOSHKA_SIZE[j] = None
@@ -282,6 +271,17 @@ def main(model_path, trainable_attention=False):
             lr=0.0004,
             trainable_attention=trainable_attention,
         )
+
+        ppl = utils.calculate_perplexity(
+            teacher_model,
+            # DATA_DIR + "datasets/wikitext",
+            DATA_DIR + "datasets/python-github-code",
+            "train",
+            tokenizer,
+            stride=1024,
+            start_index=1,
+        )
+        logging.info(f"Teacher model {i} ppl: {ppl:.3f}")
 
         # Save the model state dictionary
         torch.save(
@@ -301,12 +301,13 @@ def main(model_path, trainable_attention=False):
         CURRENT_MATRYOSHKA_SIZE[j] = None
 
     # compute the final student model ppl
-    # ppl = utils.calculate_perplexity(
-    #     teacher_model,
-    #     DATA_DIR + "datasets/pile",
-    #     "github",
-    #     tokenizer,
-    #     stride=1024,
-    #     start_index=1,
-    # )
-    # logging.info(f"Teacher model {i} ppl: {ppl:.3f}")
+    ppl = utils.calculate_perplexity(
+        teacher_model,
+        # DATA_DIR + "datasets/wikitext",
+        DATA_DIR + "datasets/python-github-code",
+        "train",
+        tokenizer,
+        stride=1024,
+        start_index=1,
+    )
+    logging.info(f"Teacher model {i} ppl: {ppl:.3f}")

@@ -95,8 +95,8 @@ def load_and_tokenize_dataset(
     if not os.path.exists(encodings_dir) or not os.listdir(encodings_dir):
         logging.info("downloading the datset")
         os.makedirs(encodings_dir, exist_ok=True)
-        prepare_and_save_chunks(path, split, tokenizer, dataset_name)
 
+    prepare_and_save_chunks(path, split, tokenizer, dataset_name)
     chunks = sorted(os.listdir(encodings_dir))  # Ensure chunks are processed in order
 
     # keep one out of 25 cause dataset is huge
@@ -139,7 +139,7 @@ def calculate_perplexity(
     encodings_dir = os.path.join(path, "encodings")
     chunks = sorted(os.listdir(encodings_dir))[start_index::100]
 
-    max_length = model.config.n_positions
+    max_length = 1024  # model.config.n_positions
     nlls = []
 
     for chunk_file in tqdm(
