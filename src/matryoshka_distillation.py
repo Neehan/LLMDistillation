@@ -28,16 +28,18 @@ class MatryoshkaMLP(nn.Module):
         distilled_hidden_size = CURRENT_MATRYOSHKA_SIZE[self.layer_id]
         if distilled_hidden_size is not None:
             # Ensure the current size is within the allowed dimensions
-            hidden_dim = self.original_mlp.c_fc.weight.shape[1]
+            hidden_dim = self.original_mlp.dense_h_to_4h.weight.shape[1]
             assert (
                 distilled_hidden_size <= hidden_dim
             ), f"distilled_hidden_size too large ({distilled_hidden_size} <= {hidden_dim})"
 
-            # Adjust the weights and biases for the c_fc layer
-            weight_fc = self.original_mlp.c_fc.weight[:, :distilled_hidden_size]
+            # Adjust the weights and biases for the dense_h_to_4h layer
+            weight_fc = self.original_mlp.dense_h_to_4h.weight[
+                :, :distilled_hidden_size
+            ]
             bias_fc = (
-                self.original_mlp.c_fc.bias[:distilled_hidden_size]
-                if self.original_mlp.c_fc.bias is not None
+                self.original_mlp.dense_h_to_4h.bias[:distilled_hidden_size]
+                if self.original_mlp.dense_h_to_4h.bias is not None
                 else None
             )
 
@@ -46,13 +48,15 @@ class MatryoshkaMLP(nn.Module):
             )  # Using F.linear because GPT-2 uses linear mappings reshaped, not actual Conv1D
             x = self.original_mlp.act(x)
 
-            # Adjust the weights for the c_proj layer
-            weight_proj = self.original_mlp.c_proj.weight[:distilled_hidden_size, :]
-            bias_proj = self.original_mlp.c_proj.bias
+            # Adjust the weights for the dense_4h_to_h layer
+            weight_proj = self.original_mlp.dense_4h_to_h.weight[
+                :distilled_hidden_size, :
+            ]
+            bias_proj = self.original_mlp.dense_4h_to_h.bias
 
             # Apply the second projection layer
             x = F.linear(x, weight_proj.T, bias_proj)
-            x = self.original_mlp.dropout(x)  # Apply dropout after projection
+            # x = self.original_mlp.dropout(x)  # Apply dropout after projection
         else:
             # Use the full MLP as is
             x = self.original_mlp(x)
@@ -90,15 +94,10 @@ def get_student_model_mlp_loss(
     loss2 = loss_fn(small_student_output, teacher_mlp_output)
 
     # also add final two layers outputs
-    loss3 = loss_fn(teacher_model_logits, full_student_model_logits)
-    loss4 = loss_fn(teacher_model_logits, small_student_model_logits)
+    # loss3 = loss_fn(teacher_model_logits, full_student_model_logits)
+    # loss4 = loss_fn(teacher_model_logits, small_student_model_logits)
 
-    # print("loss1", loss1.item())
-    # print("loss2", loss2.item())
-    # print("loss3", loss3.item())
-    # print("loss4", loss4.item())
-
-    return loss1 + loss2 + (loss3 + loss4) * 0.01
+    return loss1 + loss2  # + (loss3 + loss4) * 0.01
 
 
 def train(
@@ -144,7 +143,20 @@ def train(
 
     for epoch in range(epochs):
         losses = []
-        for encoding in token_encodings:
+        for encoding_id, encoding in enumerate(token_encodings):
+            # compute perplexity from time to time
+            if encoding_id % 2048 == 2047:
+                logging.info("calculating intermediate perplexity.")
+                ppl = utils.calculate_perplexity(
+                    student_model,
+                    DATA_DIR + "datasets/pile",
+                    "github",
+                    tokenizer=None,
+                    stride=1024,
+                    start_index=1,
+                )
+                logging.info(f"Sudent model's ppl: {ppl:.3f}")
+
             try:
                 batch = encoding.to(device)
                 optimizer.zero_grad()
@@ -217,23 +229,35 @@ def main(model_path, trainable_attention=False):
     """
     teacher_model, tokenizer = utils.load_model_and_tokenizer(DATA_DIR + model_path)
 
+    # print(teacher_model)
+
     if trainable_attention:
         logging.info("attn and mlp layers will be trained.")
     else:
         logging.info("mlp layers will be trained.")
 
-    n_layers = len(teacher_model.transformer.h)
+    n_layers = len(teacher_model.gpt_neox.layers)
 
     for i in range(n_layers - 1, -1, -1):
         # Load the dataset each time cause it's a generator under the hood
-        train_encodings = utils.load_and_tokenize_dataset(
-            DATA_DIR + "datasets/openwebtext",
-            "train",
+        # train_encodings = utils.load_and_tokenize_dataset(
+        #     DATA_DIR + "datasets/pile",
+        #     "github",
+        #     tokenizer,
+        #     max_length=1024,
+        #     batch_size=2 if TEST_ENV else 16,
+        #     # dataset_name="wikitext-2-raw-v1",
+        #     dataset_name="EleutherAI/pile",
+        # )
+        utils.load_and_tokenize_dataset(
+            DATA_DIR + "datasets/github",
+            None,
             tokenizer,
             max_length=1024,
-            batch_size=2,
-            # dataset_name="wikitext-2-raw-v1",
+            batch_size=2 if TEST_ENV else 16,
+            dataset_name="codeparrot/github-code-clean",
         )
+        logging.info("loaded the dataset")
 
         # make the teacher get output using smaller hidden size
         for j in range(i, n_layers - 1):
@@ -242,8 +266,8 @@ def main(model_path, trainable_attention=False):
         ppl = utils.calculate_perplexity(
             teacher_model,
             # DATA_DIR + "datasets/wikitext",
-            DATA_DIR + "datasets/openwebtext",
-            "train",
+            DATA_DIR + "datasets/pile",
+            "github",
             tokenizer,
             # dataset_name="wikitext-103-raw-v1",
             # dataset_name="wikitext-2-raw-v1",
@@ -287,12 +311,12 @@ def main(model_path, trainable_attention=False):
         CURRENT_MATRYOSHKA_SIZE[j] = None
 
     # compute the final student model ppl
-    ppl = utils.calculate_perplexity(
-        teacher_model,
-        DATA_DIR + "datasets/openwebtext",
-        "train",
-        tokenizer,
-        stride=1024,
-        start_index=1,
-    )
-    logging.info(f"Teacher model {i} ppl: {ppl:.3f}")
+    # ppl = utils.calculate_perplexity(
+    #     teacher_model,
+    #     DATA_DIR + "datasets/pile",
+    #     "github",
+    #     tokenizer,
+    #     stride=1024,
+    #     start_index=1,
+    # )
+    # logging.info(f"Teacher model {i} ppl: {ppl:.3f}")

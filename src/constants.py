@@ -19,6 +19,8 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Read the STDOUT environment variable
 STDOUT = os.environ.get("STDOUT", "False").lower() in ("true", "1", "t")
+TEST_ENV = os.environ.get("TEST_ENV", "False").lower() in ("true", "1", "t")
+
 
 # Use half precision weights to save memory
 IS_HALF_PRECISION = os.environ.get("HALF_PRECISION", "True").lower() in (
@@ -58,6 +60,7 @@ TQDM_OUTPUT = TqdmToLogger(logging.getLogger(), level=logging.INFO)
 MODEL_PATHS = {
     "phi1.5": "llm_cache/models--microsoft--phi-1_5",
     "gpt2": "llm_cache/gpt2",
+    "pythia-160": "llm_cache/pythia-160m",
 }
 
 MIN_INTERVAL_SEC = 15 * 60

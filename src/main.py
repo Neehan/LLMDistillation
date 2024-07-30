@@ -8,10 +8,13 @@ import constants
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--distill", help="type of distillation", default="full", type=str
+        "--distill", help="type of distillation", default="mat", type=str
     )
     parser.add_argument(
-        "--model", help="the model to distill", default="gpt2", type=str
+        "--model",
+        help="the model to distill",
+        default="pythia-160",
+        type=str,
     )
     parser.add_argument(
         "--train-attn",
