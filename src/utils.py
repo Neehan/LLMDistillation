@@ -40,7 +40,7 @@ def load_coding_dataset(
     chunk_size=1 if TEST_ENV else 5000,
     batch_size=1,
     max_length=2048,
-    buffer_size=8192,
+    buffer_size=5000,
 ):
     """
     Load coding dataset either from pretokenized files or by tokenizing a new dataset.
