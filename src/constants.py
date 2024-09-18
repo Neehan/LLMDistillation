@@ -2,7 +2,7 @@ import torch
 import matplotlib.pyplot as plt
 import os
 import logging
-from tqdm_logger import TqdmToLogger
+from src.tqdm_logger import TqdmToLogger
 
 from dotenv import load_dotenv
 import os
