@@ -233,8 +233,8 @@ def calculate_perplexity(model, save_path, stride=512, max_length=2048, n_files=
     attention_masks_list = [e["attention_mask"] for e in encodings[:n_files]]
 
     # Concatenate all input_ids and attention masks
-    input_ids = torch.cat(input_ids_list, dim=1).squeeze()
-    attention_masks = torch.cat(attention_masks_list, dim=1).squeeze()
+    input_ids = torch.cat(input_ids_list, dim=0).squeeze()
+    attention_masks = torch.cat(attention_masks_list, dim=0).squeeze()
     l_stride = stride
 
     for i in tqdm(range(0, input_ids.size(0), l_stride), desc="Perplexity:"):
