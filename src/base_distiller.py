@@ -119,7 +119,6 @@ class BaseDistiller:
                     ppl = calculate_perplexity(
                         self.student_model,
                         DATA_DIR + self.dataset_name,
-                        stride=train_seq_len,
                     )
                     logging.info(f"Sudent model's ppl: {ppl:.3f}")
                 i += 1

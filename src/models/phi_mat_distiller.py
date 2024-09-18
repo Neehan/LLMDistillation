@@ -56,7 +56,8 @@ class PhiMatDistiller(MatDistiller):
 if __name__ == "__main__":
 
     args = parser.parse_args()
-    logging.info(f"Arguments: {vars(args)}")
+    for arg, value in vars(args).items():
+        logging.info(f"Argument: {arg}, Value: {value}")
     teacher_model, tokenizer = load_model_and_tokenizer(args.model)
     print(teacher_model)
     dataset_name = "datasets/github_code"

@@ -204,39 +204,65 @@ def save_encodings_chunk(encodings, save_path, chunk_counter):
     torch.save(encodings, chunk_save_path)
 
 
-def calculate_perplexity(model, path, stride=1024):
+def calculate_perplexity(model, save_path, stride=512, max_length=2048):
+    """
+    Calculate the perplexity of the model over the dataset.
 
-    encodings_dir = os.path.join(path, "encodings")
-    chunk_file = sorted(os.listdir(encodings_dir))[0]
+    Args:
+        model: The language model.
+        save_path (str): The path to the directory containing the encoding files.
+        stride (int): The stride size for the sliding window.
 
+    Returns:
+        float: The calculated perplexity.
+    """
+    model.eval()
+    encodings_dir = os.path.join(save_path, "encodings")
+    encoding_file = sorted(
+        [
+            os.path.join(encodings_dir, f)
+            for f in os.listdir(encodings_dir)
+            if f.endswith(".pt")
+        ]
+    )[0]
     nlls = []
+    total_length = 0
 
-    chunk_path = os.path.join(encodings_dir, chunk_file)
-    encodings = torch.load(chunk_path, weights_only=False)
-    for encoding in encodings:
-        input_ids = encoding["input_ids"]
-        seq_len = input_ids.size(1)
-        prev_end_loc = 0
-        for begin_loc in tqdm(
-            range(0, seq_len, stride), desc="Calculating Perplexity:", file=TQDM_OUTPUT
-        ):
-            end_loc = min(begin_loc + stride, seq_len)
-            trg_len = (
-                end_loc - prev_end_loc
-            )  # may be different from stride on last loop
-            input_ids_slice = input_ids[:, begin_loc:end_loc].to(model.device)
-            target_ids = input_ids_slice.clone()
-            target_ids[:, :-trg_len] = -100
+    encodings = torch.load(encoding_file, weights_only=False)
+    input_ids_list = [e["input_ids"] for e in encodings]
+    attention_masks_list = [e["attention_mask"] for e in encodings]
 
-            with torch.no_grad():
-                outputs = model(input_ids_slice, labels=target_ids)
-                neg_log_likelihood = outputs.loss
+    # Concatenate all input_ids and attention masks
+    input_ids = torch.cat(input_ids_list, dim=0)
+    attention_masks = torch.cat(attention_masks_list, dim=0)
+    l_stride = stride
 
-            nlls.append(neg_log_likelihood)
+    for i in tqdm(
+        range(0, input_ids.size(0), l_stride),
+        desc="Perplexity:",
+        file=TQDM_OUTPUT,
+        mininterval=1,
+    ):
+        begin_loc = max(i + l_stride - max_length, 0)
+        end_loc = i + l_stride
+        trg_len = end_loc - i  # Number of tokens to predict
+        input_ids_slice = input_ids[begin_loc:end_loc]
+        attention_mask_slice = attention_masks[begin_loc:end_loc]
+        target_ids = input_ids_slice.clone()
+        target_ids[:-trg_len] = -100  # Mask tokens not to predict
 
-            prev_end_loc = end_loc
-            if end_loc == seq_len:
-                break
+        input_ids_slice = input_ids_slice.unsqueeze(0).to(model.device)
+        attention_mask_slice = attention_mask_slice.unsqueeze(0).to(model.device)
+        target_ids = target_ids.unsqueeze(0).to(model.device)
 
-    ppl = torch.exp(torch.stack(nlls).mean())
-    return ppl
+        with torch.no_grad():
+            outputs = model(
+                input_ids_slice, attention_mask=attention_mask_slice, labels=target_ids
+            )
+            neg_log_likelihood = outputs.loss * trg_len
+
+        nlls.append(neg_log_likelihood)
+        total_length += trg_len
+
+    ppl = torch.exp(torch.stack(nlls).sum() / total_length)
+    return ppl.item()

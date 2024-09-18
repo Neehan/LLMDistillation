@@ -45,7 +45,6 @@ def training_loop(
         ppl = utils.calculate_perplexity(
             teacher_model,
             DATA_DIR + dataset_name,
-            stride=max_seq_len,
         )
         logging.info(f"Teacher model {layer_id} ppl: {ppl:.3f}")
 
@@ -67,6 +66,5 @@ def training_loop(
     ppl = utils.calculate_perplexity(
         teacher_model,
         DATA_DIR + dataset_name,
-        stride=max_seq_len,
     )
     logging.info(f"Teacher model {layer_id} ppl: {ppl:.3f}")
