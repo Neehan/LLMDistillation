@@ -9,6 +9,7 @@ from src.constants import (
     MODEL_PRECISION,
     MIN_INTERVAL_SEC,
     TQDM_OUTPUT,
+    TEST_ENV,
 )
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from itertools import islice
@@ -36,7 +37,7 @@ def load_model_and_tokenizer(path):
 def load_coding_dataset(
     tokenizer,
     save_path=DATA_DIR + "datasets/github_code/encodings",
-    chunk_size=1,
+    chunk_size=1 if TEST_ENV else 10000,
     batch_size=1,
     max_length=2048,
 ):
@@ -77,7 +78,9 @@ def load_encodings_from_files(save_path, batch_size):
         [os.path.join(save_path, f) for f in os.listdir(save_path) if f.endswith(".pt")]
     )
     batch = []
-    for encoding_file in encoding_files:
+    for encoding_file in tqdm(
+        encoding_files, desc="Training", file=TQDM_OUTPUT, mininterval=MIN_INTERVAL_SEC
+    ):
         encodings = torch.load(encoding_file, weights_only=False)
         for encoding in encodings:
             batch.append(encoding["input_ids"])
@@ -120,7 +123,8 @@ def tokenize_and_save_dataset(tokenizer, save_path, chunk_size, batch_size, max_
     batch = []
 
     for i, example in enumerate(
-        tqdm(islice(iter(ds), 10_000), desc="Tokenizing dataset")
+        # tqdm(islice(iter(ds), 10_000), desc="Tokenizing dataset")
+        tqdm(ds, desc="Tokenizing dataset")
     ):
         encoding = tokenizer(
             example["code"],
@@ -134,6 +138,8 @@ def tokenize_and_save_dataset(tokenizer, save_path, chunk_size, batch_size, max_
             yield torch.cat(batch, dim=0)
             batch = []
 
+        if i % 10 == 0:
+            logging.info(f"tokenized chunk {i}")
         encodings.append(encoding)
         if (i + 1) % chunk_size == 0:
             save_encodings_chunk(encodings, save_path, chunk_counter)
