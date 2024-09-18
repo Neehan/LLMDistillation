@@ -233,31 +233,27 @@ def calculate_perplexity(model, save_path, stride=512, max_length=2048, n_files=
     attention_masks_list = [e["attention_mask"] for e in encodings[:n_files]]
 
     # Concatenate all input_ids and attention masks
-    input_ids = torch.cat(input_ids_list, dim=0)
-    attention_masks = torch.cat(attention_masks_list, dim=0)
+    input_ids = torch.cat(input_ids_list, dim=1).squeeze()
+    attention_masks = torch.cat(attention_masks_list, dim=1).squeeze()
     l_stride = stride
 
-    for i in tqdm(
-        range(0, input_ids.size(0), l_stride),
-        desc="Perplexity:",
-        file=TQDM_OUTPUT,
-        mininterval=MIN_INTERVAL_SEC,
-    ):
+    for i in tqdm(range(0, input_ids.size(0), l_stride), desc="Perplexity:"):
         begin_loc = max(i + l_stride - max_length, 0)
         end_loc = i + l_stride
         trg_len = end_loc - i  # Number of tokens to predict
         input_ids_slice = input_ids[begin_loc:end_loc]
         attention_mask_slice = attention_masks[begin_loc:end_loc]
-        target_ids = input_ids_slice.clone()
-        target_ids[:-trg_len] = -100  # Mask tokens not to predict
+        labels = input_ids_slice.clone()
+        labels[:-trg_len] = -100  # Mask tokens not to predict
 
+        # Ensure proper device placement
         input_ids_slice = input_ids_slice.unsqueeze(0).to(model.device)
         attention_mask_slice = attention_mask_slice.unsqueeze(0).to(model.device)
-        target_ids = target_ids.unsqueeze(0).to(model.device)
+        labels = labels.unsqueeze(0).to(model.device)
 
         with torch.no_grad():
             outputs = model(
-                input_ids_slice, attention_mask=attention_mask_slice, labels=target_ids
+                input_ids_slice, attention_mask=attention_mask_slice, labels=labels
             )
             neg_log_likelihood = outputs.loss * trg_len
 

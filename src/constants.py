@@ -63,4 +63,4 @@ MODEL_PATHS = {
     "pythia-160": "llm_cache/pythia-160m",
 }
 
-MIN_INTERVAL_SEC = 15 * 60
+MIN_INTERVAL_SEC = 2 * 60

@@ -102,9 +102,6 @@ class BaseDistiller:
         self.student_model = self.student_model.to(self.device).to(torch.float32)
         self.register_hooks(layer_id)
 
-        self.teacher_model.eval()
-        self.student_model.train()
-
         optimizer = torch.optim.Adam(
             filter(lambda p: p.requires_grad, self.student_model.parameters()), lr=lr
         )
@@ -124,6 +121,9 @@ class BaseDistiller:
                 i += 1
 
                 try:
+                    self.teacher_model.eval()
+                    self.student_model.train()
+
                     input_ids = batch["input_ids"].to(self.device)
                     attention_mask = batch["attention_mask"].to(self.device)
                     optimizer.zero_grad()
