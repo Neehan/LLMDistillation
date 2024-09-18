@@ -152,6 +152,7 @@ def tokenize_and_save_dataset(
             buffer = []
 
         if len(encodings) >= chunk_size:
+            logging.info(f"saving chunk {chunk_counter}.")
             save_encodings_chunk(encodings, save_path, chunk_counter)
             encodings = []
             chunk_counter += 1
