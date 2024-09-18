@@ -6,7 +6,16 @@ from src import utils
 import gc
 
 
-def training_loop(teacher_model, tokenizer, distiller, dataset_name):
+def training_loop(
+    teacher_model,
+    tokenizer,
+    distiller,
+    dataset_name,
+    lr,
+    num_epochs,
+    max_seq_len,
+    batch_size,
+):
     """
     progressively distill a student model by distilling one MLP
     layer at a time and then using the resulting model as teacher
@@ -16,40 +25,35 @@ def training_loop(teacher_model, tokenizer, distiller, dataset_name):
 
     for layer_id in range(n_layers - 1, -1, -1):
         # Load the dataset each time cause it's a generator under the hood
-        train_encodings = utils.load_coding_dataset(tokenizer=tokenizer)
+        train_encodings = utils.load_coding_dataset(
+            tokenizer=tokenizer, batch_size=batch_size, max_length=max_seq_len
+        )
 
         logging.info("loaded the dataset")
         logging.info(f"Training student model {layer_id}.")
 
-        distiller.train_layer(
-            train_encodings, train_seq_len=2048, layer_id=layer_id, loss_fn=nn.MSELoss()
+        student_model = distiller.train_layer(
+            train_encodings,
+            train_seq_len=max_seq_len,
+            layer_id=layer_id,
+            loss_fn=nn.MSELoss(),
+            epochs=num_epochs,
+            lr=lr,
         )
 
         # calculate the ppl of the teacher model first
         ppl = utils.calculate_perplexity(
             teacher_model,
             DATA_DIR + dataset_name,
-            "train",
-            tokenizer,
-            stride=1024,
-            start_index=1,
+            stride=max_seq_len,
         )
         logging.info(f"Teacher model {layer_id} ppl: {ppl:.3f}")
 
-        # Use BaseDistiller to handle training
-        student_model = distiller.train_layer(
-            train_seq_len=2048,
-            layer_id=layer_id,
-            loss_fn=nn.MSELoss(),
-            epochs=1,
-            lr=0.0004,
-        )
-
         # Save the model state dictionary
-        torch.save(
-            student_model,
-            DATA_DIR + "llm_cache/model" + f"_matryoshka_student_{layer_id}.pth",
-        )
+        # torch.save(
+        #     student_model,
+        #     DATA_DIR + "llm_cache/model" + f"_matryoshka_student_{layer_id}.pth",
+        # )
 
         # delete current teacher which we don't need anymore
         del teacher_model
@@ -63,9 +67,6 @@ def training_loop(teacher_model, tokenizer, distiller, dataset_name):
     ppl = utils.calculate_perplexity(
         teacher_model,
         DATA_DIR + dataset_name,
-        "train",
-        tokenizer,
-        stride=1024,
-        start_index=1,
+        stride=max_seq_len,
     )
     logging.info(f"Teacher model {layer_id} ppl: {ppl:.3f}")

@@ -1,12 +1,11 @@
 import copy
 import torch.nn.functional as F
 from src.mat_distiller import MatDistiller, MatryoshkaMLP
-from src.training_loop import training_loop
+from src.training_loop import training_loop as base_training_loop
 from src.utils import load_model_and_tokenizer
-from src.argparser import parser
 
 
-class PhiMatMLP(MatryoshkaMLP):
+class PythiaMatMLP(MatryoshkaMLP):
     def _mat_forward(self, x):
         hidden_dim = (
             self.hidden_dim_list[self.layer_id]
@@ -31,44 +30,30 @@ class PhiMatMLP(MatryoshkaMLP):
         return x
 
 
-class PhiMatDistiller(MatDistiller):
+class PythiaMatDistiller(MatDistiller):
     def get_model_layers(self, model):
-        return model.model.layers
+        return model.transformer.h
 
     def get_model_mlp(self, model, layer_id):
-        return model.model.layers[layer_id].mlp
+        return model.transformer.h[layer_id].mlp
 
     def prepare_student_model(self, layer_id):
         self.student_model = copy.deepcopy(self.teacher_model)
-        self.student_model.model.layers[layer_id].mlp = PhiMatMLP(
-            self.student_model.model.layers[layer_id].mlp,
-            self.hidden_dim_list,
-            layer_id,
+        self.student_model.transformer.h[layer_id].mlp = PythiaMatMLP(
+            self.student_model.transformer.h[layer_id].mlp
         )
 
         # Disable gradients for all layers except the MLP layer just replaced
         for name, param in self.student_model.named_parameters():
-            if f"model.layers.{layer_id}.mlp" not in name:
+            if f"transformer.h.{layer_id}.mlp" not in name:
                 param.requires_grad = False
 
 
-if __name__ == "__main__":
-
-    args = parser.parse_args()
-    teacher_model, tokenizer = load_model_and_tokenizer(args.model)
+def training_loop(model_path, dataset_name):
+    teacher_model, tokenizer = load_model_and_tokenizer(model_path)
     print(teacher_model)
-    dataset_name = "datasets/github_code"
 
-    distiller = PhiMatDistiller(
-        teacher_model, tokenizer, dataset_name=dataset_name, mat_dim=args.distill_dim
+    distiller = PythiaMatDistiller(
+        teacher_model, tokenizer, dataset_name=dataset_name, mat_dim=4096
     )
-    training_loop(
-        teacher_model,
-        tokenizer,
-        distiller,
-        dataset_name,
-        lr=args.lr,
-        num_epochs=args.num_epochs,
-        max_seq_len=args.max_seq_len,
-        batch_size=args.batch_size,
-    )
+    base_training_loop(teacher_model, tokenizer, distiller, dataset_name)

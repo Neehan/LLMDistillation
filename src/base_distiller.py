@@ -114,9 +114,9 @@ class BaseDistiller:
         for epoch in range(epochs):
             losses = []
             i = 0
-            for encoding in train_encodings:
+            for batch in train_encodings:
                 try:
-                    batch = encoding.input_ids.to(self.device)
+                    batch = batch.to(self.device)
                     optimizer.zero_grad()
 
                     if torch.cuda.is_available():
@@ -150,10 +150,7 @@ class BaseDistiller:
                 ppl = calculate_perplexity(
                     self.student_model,
                     DATA_DIR + self.dataset_name,
-                    "train",
-                    tokenizer=None,
-                    stride=1024,
-                    start_index=1,
+                    stride=train_seq_len,
                 )
                 logging.info(f"Sudent model's ppl: {ppl:.3f}")
 

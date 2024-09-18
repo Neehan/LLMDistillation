@@ -34,23 +34,74 @@ def load_model_and_tokenizer(path):
 
 
 def load_coding_dataset(
-    tokenizer, save_path=DATA_DIR + "datasets/github_code/encodings", chunk_size=1000
+    tokenizer,
+    save_path=DATA_DIR + "datasets/github_code/encodings",
+    chunk_size=1,
+    batch_size=1,
+    max_length=2048,
 ):
-    # if os.path.exists(save_path):
-    #     logging.info(f"Loading pretokenized encodings from {save_path}")
-    #     encoding_files = sorted(
-    #         [
-    #             os.path.join(save_path, f)
-    #             for f in os.listdir(save_path)
-    #             if f.endswith(".pt")
-    #         ]
-    #     )
-    #     # Yield encodings from saved files
-    #     for encoding_file in encoding_files:
-    #         encodings = torch.load(encoding_file)
-    #         for encoding in encodings:
-    #             yield encoding
-    # else:
+    """
+    Load coding dataset either from pretokenized files or by tokenizing a new dataset.
+
+    Args:
+        tokenizer: The tokenizer to use for encoding the dataset.
+        save_path (str): The path to save or load the dataset encodings.
+        chunk_size (int): The size of chunks to save during tokenization.
+        batch_size (int): The number of encodings to yield at once.
+        max_length (int): The maximum length of the tokenized sequences.
+
+    Yields:
+        torch.Tensor: A batch of tokenized input IDs.
+    """
+    if os.path.exists(save_path) and os.listdir(save_path):
+        yield from load_encodings_from_files(save_path, batch_size)
+    else:
+        yield from tokenize_and_save_dataset(
+            tokenizer, save_path, chunk_size, batch_size, max_length
+        )
+
+
+def load_encodings_from_files(save_path, batch_size):
+    """
+    Load pretokenized encodings from files in the specified directory.
+
+    Args:
+        save_path (str): The path to the directory containing the encoding files.
+        batch_size (int): The number of encodings to yield at once.
+
+    Yields:
+        torch.Tensor: A batch of input IDs loaded from the encoding files.
+    """
+    logging.info(f"Loading pretokenized encodings from {save_path}")
+    encoding_files = sorted(
+        [os.path.join(save_path, f) for f in os.listdir(save_path) if f.endswith(".pt")]
+    )
+    batch = []
+    for encoding_file in encoding_files:
+        encodings = torch.load(encoding_file, weights_only=False)
+        for encoding in encodings:
+            batch.append(encoding["input_ids"])
+            if len(batch) == batch_size:
+                yield torch.cat(batch, dim=0)
+                batch = []
+    if batch:
+        yield torch.cat(batch, dim=0)
+
+
+def tokenize_and_save_dataset(tokenizer, save_path, chunk_size, batch_size, max_length):
+    """
+    Tokenize a dataset and save the encodings to the specified path.
+
+    Args:
+        tokenizer: The tokenizer to use for encoding the dataset.
+        save_path (str): The path to save the tokenized encodings.
+        chunk_size (int): The size of chunks to save during tokenization.
+        batch_size (int): The number of encodings to yield at once.
+        max_length (int): The maximum length of the tokenized sequences.
+
+    Yields:
+        torch.Tensor: A batch of tokenized input IDs.
+    """
     logging.info("Tokenizing dataset and saving encodings")
     ds = datasets.load_dataset(
         "codeparrot/github-code",
@@ -58,6 +109,7 @@ def load_coding_dataset(
         split="train",
         languages=["Python"],
         filter_languages=True,
+        filter_licenses=True,
         licenses=["mit", "isc"],
         trust_remote_code=True,
         cache_dir=DATA_DIR + "datasets/",
@@ -65,77 +117,82 @@ def load_coding_dataset(
     os.makedirs(save_path, exist_ok=True)
     encodings = []
     chunk_counter = 0
+    batch = []
+
     for i, example in enumerate(
         tqdm(islice(iter(ds), 10_000), desc="Tokenizing dataset")
     ):
-        encoding = tokenizer(example["code"], return_tensors="pt")
+        encoding = tokenizer(
+            example["code"],
+            return_tensors="pt",
+            truncation=True,
+            max_length=max_length,
+        )
+        batch.append(encoding["input_ids"])
+
+        if len(batch) == batch_size:
+            yield torch.cat(batch, dim=0)
+            batch = []
+
         encodings.append(encoding)
-
-        # Yield the encoding
-        yield encoding
-
-        # Save encodings in chunks
         if (i + 1) % chunk_size == 0:
-            chunk_save_path = os.path.join(save_path, f"chunk_{chunk_counter}.pt")
-            torch.save(encodings, chunk_save_path)
+            save_encodings_chunk(encodings, save_path, chunk_counter)
             encodings = []
             chunk_counter += 1
 
-    # Save any remaining encodings after the loop completes
+    if batch:
+        yield torch.cat(batch, dim=0)
+
     if encodings:
-        chunk_save_path = os.path.join(save_path, f"chunk_{chunk_counter}.pt")
-        torch.save(encodings, chunk_save_path)
+        save_encodings_chunk(encodings, save_path, chunk_counter)
 
 
-def calculate_perplexity(
-    model, path, split, tokenizer, dataset_name=None, stride=1024, start_index=1
-):
-    if dataset_name is None:
-        logging.info(f"computing perplexity on {path}/{split}")
-    else:
-        logging.info(f"computing perplexity on {path}/{dataset_name}/{split}")
+def save_encodings_chunk(encodings, save_path, chunk_counter):
+    """
+    Save a chunk of encodings to a file.
 
-    # dataset = datasets.load_dataset(path, dataset_name, split=split)
-    # concatenated_text = "\n\n".join(
-    #     dataset["text"]
-    # )  # Concatenate all texts with separator
-    # encodings = tokenizer(concatenated_text, return_tensors="pt")
+    Args:
+        encodings (list): The list of encodings to save.
+        save_path (str): The path to save the encodings.
+        chunk_counter (int): The current chunk number for naming the file.
+    """
+    chunk_save_path = os.path.join(save_path, f"chunk_{chunk_counter}.pt")
+    torch.save(encodings, chunk_save_path)
+
+
+def calculate_perplexity(model, path, stride=1024):
 
     encodings_dir = os.path.join(path, "encodings")
-    chunks = sorted(os.listdir(encodings_dir))[start_index::100]
+    chunk_file = sorted(os.listdir(encodings_dir))[0]
 
-    max_length = 1024  # model.config.n_positions
     nlls = []
 
-    for chunk_file in tqdm(
-        chunks,
-        desc="Computing Perplexity",
-        mininterval=MIN_INTERVAL_SEC,
-        file=TQDM_OUTPUT,
-    ):
-        if chunk_file.startswith(f"{split}_chunk") and chunk_file.endswith(".pt"):
-            chunk_path = os.path.join(encodings_dir, chunk_file)
-            encodings = torch.load(chunk_path)
-            seq_len = encodings.input_ids.size(1)
-            prev_end_loc = 0
-            for begin_loc in range(0, seq_len, stride):
-                end_loc = min(begin_loc + max_length, seq_len)
-                trg_len = (
-                    end_loc - prev_end_loc
-                )  # may be different from stride on last loop
-                input_ids = encodings.input_ids[:, begin_loc:end_loc].to(model.device)
-                target_ids = input_ids.clone()
-                target_ids[:, :-trg_len] = -100
+    chunk_path = os.path.join(encodings_dir, chunk_file)
+    encodings = torch.load(chunk_path, weights_only=False)
+    for encoding in encodings:
+        input_ids = encoding["input_ids"]
+        seq_len = input_ids.size(1)
+        prev_end_loc = 0
+        for begin_loc in tqdm(
+            range(0, seq_len, stride), desc="Calculating Perplexity:", file=TQDM_OUTPUT
+        ):
+            end_loc = min(begin_loc + stride, seq_len)
+            trg_len = (
+                end_loc - prev_end_loc
+            )  # may be different from stride on last loop
+            input_ids_slice = input_ids[:, begin_loc:end_loc].to(model.device)
+            target_ids = input_ids_slice.clone()
+            target_ids[:, :-trg_len] = -100
 
-                with torch.no_grad():
-                    outputs = model(input_ids, labels=target_ids)
-                    neg_log_likelihood = outputs.loss
+            with torch.no_grad():
+                outputs = model(input_ids_slice, labels=target_ids)
+                neg_log_likelihood = outputs.loss
 
-                nlls.append(neg_log_likelihood)
+            nlls.append(neg_log_likelihood)
 
-                prev_end_loc = end_loc
-                if end_loc == seq_len:
-                    break
+            prev_end_loc = end_loc
+            if end_loc == seq_len:
+                break
 
     ppl = torch.exp(torch.stack(nlls).mean())
     return ppl
