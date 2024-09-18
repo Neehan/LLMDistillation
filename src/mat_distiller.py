@@ -55,8 +55,6 @@ class MatDistiller(BaseDistiller):
         loss1 = loss_fn(large_student_mlp_output, teacher_mlp_output)
         loss2 = loss_fn(small_student_mlp_output, teacher_mlp_output)
 
-        print("loss 1 and 2: ", loss1.item(), loss2.item())
-
         # keep mat dim to be small so that when ppl is calculated, it is
         # calculated from the small model
 
