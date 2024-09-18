@@ -1,7 +1,5 @@
 import torch
-import torch.nn as nn
-import copy
-from torch.cuda.amp import autocast, GradScaler
+from torch.amp import autocast, GradScaler
 from tqdm import tqdm
 import logging
 from src.constants import MODEL_PRECISION, TQDM_OUTPUT, MIN_INTERVAL_SEC, DATA_DIR
@@ -18,7 +16,7 @@ class BaseDistiller:
         self.student_model = None
         self.teacher_hook = None
         self.student_hook = None
-        self.scaler = GradScaler() if torch.cuda.is_available() else None
+        self.scaler = GradScaler("cuda") if torch.cuda.is_available() else None
         self.num_layers = len(self.get_model_layers(teacher_model))
         self.teacher_mlp_outputs = [None] * self.num_layers
         self.student_mlp_outputs = [None] * self.num_layers
@@ -120,7 +118,7 @@ class BaseDistiller:
                     optimizer.zero_grad()
 
                     if torch.cuda.is_available():
-                        with autocast():
+                        with autocast("cuda"):
                             self.student_model(input_ids=batch)
                             # hook saves the intermediate outputs to self.student_mlp_outputs
                             loss = self.compute_loss(layer_id, batch, loss_fn=loss_fn)
