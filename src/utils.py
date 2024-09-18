@@ -11,6 +11,7 @@ from src.constants import (
     TQDM_OUTPUT,
 )
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from itertools import islice
 
 
 def load_model_and_tokenizer(path):
@@ -35,48 +36,55 @@ def load_model_and_tokenizer(path):
 def load_coding_dataset(
     tokenizer, save_path=DATA_DIR + "datasets/github_code/encodings", chunk_size=1000
 ):
-    if os.path.exists(save_path):
-        logging.info(f"Loading pretokenized encodings from {save_path}")
-        encoding_files = sorted(
-            [
-                os.path.join(save_path, f)
-                for f in os.listdir(save_path)
-                if f.endswith(".pt")
-            ]
-        )
-    else:
-        logging.info("Tokenizing dataset and saving encodings")
-        ds = datasets.load_dataset(
-            "codeparrot/github-code",
-            streaming=True,
-            split="train",
-            languages=["Python"],
-            licenses=["mit", "isc"],
-            cache_dir=DATA_DIR + "datasets/",
-        )
-        os.makedirs(save_path, exist_ok=True)
-        encodings = []
-        chunk_counter = 0
-        for i, example in enumerate(
-            tqdm(iter(ds).take(10_000), desc="Tokenizing dataset")
-        ):
-            encodings.append(tokenizer(example["code"], return_tensors="pt"))
-            if (i + 1) % chunk_size == 0:
-                chunk_save_path = os.path.join(save_path, f"chunk_{chunk_counter}.pt")
-                torch.save(encodings, chunk_save_path)
-                encodings = []
-                chunk_counter += 1
-        if encodings:  # Save any remaining encodings
+    # if os.path.exists(save_path):
+    #     logging.info(f"Loading pretokenized encodings from {save_path}")
+    #     encoding_files = sorted(
+    #         [
+    #             os.path.join(save_path, f)
+    #             for f in os.listdir(save_path)
+    #             if f.endswith(".pt")
+    #         ]
+    #     )
+    #     # Yield encodings from saved files
+    #     for encoding_file in encoding_files:
+    #         encodings = torch.load(encoding_file)
+    #         for encoding in encodings:
+    #             yield encoding
+    # else:
+    logging.info("Tokenizing dataset and saving encodings")
+    ds = datasets.load_dataset(
+        "codeparrot/github-code",
+        streaming=True,
+        split="train",
+        languages=["Python"],
+        filter_languages=True,
+        licenses=["mit", "isc"],
+        trust_remote_code=True,
+        cache_dir=DATA_DIR + "datasets/",
+    )
+    os.makedirs(save_path, exist_ok=True)
+    encodings = []
+    chunk_counter = 0
+    for i, example in enumerate(
+        tqdm(islice(iter(ds), 10_000), desc="Tokenizing dataset")
+    ):
+        encoding = tokenizer(example["code"], return_tensors="pt")
+        encodings.append(encoding)
+
+        # Yield the encoding
+        yield encoding
+
+        # Save encodings in chunks
+        if (i + 1) % chunk_size == 0:
             chunk_save_path = os.path.join(save_path, f"chunk_{chunk_counter}.pt")
             torch.save(encodings, chunk_save_path)
-        encoding_files = sorted(
-            [
-                os.path.join(save_path, f)
-                for f in os.listdir(save_path)
-                if f.endswith(".pt")
-            ]
-        )
-    return encoding_files
+            encodings = []
+            chunk_counter += 1
+
+    # Save any remaining encodings after the loop completes
+    if encodings:
+        chunk_save_path = os.path.join(save_path, f"chunk_{chunk_counter}.pt")
+        torch.save(encodings, chunk_save_path)
 
 
 def calculate_perplexity(

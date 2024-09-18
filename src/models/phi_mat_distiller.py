@@ -1,7 +1,5 @@
 import copy
-import torch
-import torch.nn as nn
-import torch.functional as F
+import torch.nn.functional as F
 from src.mat_distiller import MatDistiller, MatryoshkaMLP
 from src.training_loop import training_loop as base_training_loop
 from src.utils import load_model_and_tokenizer

@@ -119,9 +119,9 @@ class BaseDistiller:
 
         for epoch in range(epochs):
             losses = []
-            for batch in train_encodings:
+            for encoding in train_encodings:
                 try:
-                    batch = batch.to(self.device)
+                    batch = encoding.input_ids.to(self.device)
                     optimizer.zero_grad()
 
                     if torch.cuda.is_available():

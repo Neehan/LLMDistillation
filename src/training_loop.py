@@ -16,13 +16,7 @@ def training_loop(teacher_model, tokenizer, distiller, dataset_name):
 
     for layer_id in range(n_layers - 1, -1, -1):
         # Load the dataset each time cause it's a generator under the hood
-        train_encodings = utils.load_and_tokenize_dataset(
-            DATA_DIR + dataset_name,
-            "train",
-            tokenizer,
-            max_length=1024,
-            batch_size=2 if TEST_ENV else 16,
-        )
+        train_encodings = utils.load_coding_dataset(tokenizer=tokenizer)
 
         logging.info("loaded the dataset")
         logging.info(f"Training student model {layer_id}.")
@@ -54,7 +48,7 @@ def training_loop(teacher_model, tokenizer, distiller, dataset_name):
         # Save the model state dictionary
         torch.save(
             student_model,
-            DATA_DIR + model_path + f"_matryoshka_student_{layer_id}.pth",
+            DATA_DIR + "llm_cache/model" + f"_matryoshka_student_{layer_id}.pth",
         )
 
         # delete current teacher which we don't need anymore
