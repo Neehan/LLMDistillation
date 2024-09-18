@@ -37,10 +37,11 @@ def load_model_and_tokenizer(path):
 def load_coding_dataset(
     tokenizer,
     save_path=DATA_DIR + "datasets/github_code/encodings",
-    chunk_size=1 if TEST_ENV else 5000,
+    chunk_size=5000,
     batch_size=1,
     max_length=2048,
     buffer_size=5000,
+    force_reload=False,
 ):
     """
     Load coding dataset either from pretokenized files or by tokenizing a new dataset.
@@ -55,7 +56,7 @@ def load_coding_dataset(
     Yields:
         torch.Tensor: A batch of tokenized input IDs.
     """
-    if not os.path.exists(save_path) or not os.listdir(save_path):
+    if not os.path.exists(save_path) or not os.listdir(save_path) or force_reload:
         tokenize_and_save_dataset(
             tokenizer, save_path, chunk_size, buffer_size, max_length
         )
@@ -110,11 +111,8 @@ def tokenize_and_save_dataset(
         tokenizer: The tokenizer to use for encoding the dataset.
         save_path (str): The path to save the tokenized encodings.
         chunk_size (int): The size of chunks to save during tokenization.
-        batch_size (int): The number of encodings to yield at once.
+        buffer_size (int): The size of the buffer to accumulate examples before tokenizing.
         max_length (int): The maximum length of the tokenized sequences.
-
-    Yields:
-        dict: A batch of tokenized input IDs and attention masks.
     """
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -148,7 +146,17 @@ def tokenize_and_save_dataset(
                 max_length=max_length,
                 padding=True,
             )
-            encodings.extend(encodings_batch)
+
+            input_ids_list = encodings_batch["input_ids"].tolist()
+            attention_mask_list = encodings_batch["attention_mask"].tolist()
+
+            for input_ids, attention_mask in zip(input_ids_list, attention_mask_list):
+                encodings.append(
+                    {
+                        "input_ids": torch.tensor(input_ids),
+                        "attention_mask": torch.tensor(attention_mask),
+                    }
+                )
             buffer = []
 
         if len(encodings) >= chunk_size:
@@ -165,7 +173,17 @@ def tokenize_and_save_dataset(
             max_length=max_length,
             padding=True,
         )
-        encodings.extend(encodings_batch)
+
+        input_ids_list = encodings_batch["input_ids"].tolist()
+        attention_mask_list = encodings_batch["attention_mask"].tolist()
+
+        for input_ids, attention_mask in zip(input_ids_list, attention_mask_list):
+            encodings.append(
+                {
+                    "input_ids": torch.tensor(input_ids),
+                    "attention_mask": torch.tensor(attention_mask),
+                }
+            )
 
     if encodings:
         save_encodings_chunk(encodings, save_path, chunk_counter)
