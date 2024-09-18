@@ -37,7 +37,7 @@ def load_model_and_tokenizer(path):
 def load_coding_dataset(
     tokenizer,
     save_path=DATA_DIR + "datasets/github_code/encodings",
-    chunk_size=1 if TEST_ENV else 10_000,
+    chunk_size=1 if TEST_ENV else 5000,
     batch_size=1,
     max_length=2048,
 ):
@@ -125,8 +125,8 @@ def tokenize_and_save_dataset(tokenizer, save_path, chunk_size, batch_size, max_
     logging.info(f"chunk size: {chunk_size}")
 
     for i, example in enumerate(
-        # tqdm(islice(iter(ds), 10_000), desc="Tokenizing dataset")
-        tqdm(ds, desc="Tokenizing dataset")
+        tqdm(islice(iter(ds), 100_000), desc="Tokenizing dataset")
+        # tqdm(ds, desc="Tokenizing dataset")
     ):
         encoding = tokenizer(
             example["code"],
@@ -142,7 +142,7 @@ def tokenize_and_save_dataset(tokenizer, save_path, chunk_size, batch_size, max_
 
         encodings.append(encoding)
         if (i + 1) % chunk_size == 0:
-            if chunk_size % 10 == 0:
+            if chunk_size % 4 == 0:
                 logging.info(f"tokenized chunk {chunk_size}")
             save_encodings_chunk(encodings, save_path, chunk_counter)
             encodings = []
