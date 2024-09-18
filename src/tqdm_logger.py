@@ -10,7 +10,11 @@ class TqdmToLogger(object):
         self.buf = ""
 
     def write(self, buf):
-        self.buf = buf.strip("\r\n\t ")
+        self.buf += buf
+        if "\n" in self.buf:
+            self.flush()
+            self.buf = ""
 
     def flush(self):
-        self.logger.log(self.level, self.buf)
+        if self.buf:
+            self.logger.log(self.level, self.buf.strip("\r\n\t "))
