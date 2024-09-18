@@ -140,10 +140,10 @@ def tokenize_and_save_dataset(tokenizer, save_path, chunk_size, batch_size, max_
             yield torch.cat(batch, dim=0)
             batch = []
 
-        if chunk_size % 10 == 0:
-            logging.info(f"tokenized chunk {chunk_size}")
         encodings.append(encoding)
         if (i + 1) % chunk_size == 0:
+            if chunk_size % 10 == 0:
+                logging.info(f"tokenized chunk {chunk_size}")
             save_encodings_chunk(encodings, save_path, chunk_counter)
             encodings = []
             chunk_counter += 1
