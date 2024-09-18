@@ -30,6 +30,14 @@ def training_loop(
         )
 
         logging.info("loaded the dataset")
+
+        # calculate the ppl of the teacher model first
+        ppl = utils.calculate_perplexity(
+            teacher_model,
+            tokenizer,
+        )
+        logging.info(f"Teacher model {layer_id} ppl: {ppl:.3f}")
+
         logging.info(f"Training student model {layer_id}.")
 
         student_model = distiller.train_layer(
@@ -40,13 +48,6 @@ def training_loop(
             epochs=num_epochs,
             lr=lr,
         )
-
-        # calculate the ppl of the teacher model first
-        ppl = utils.calculate_perplexity(
-            teacher_model,
-            tokenizer,
-        )
-        logging.info(f"Teacher model {layer_id} ppl: {ppl:.3f}")
 
         # Save the model state dictionary
         # torch.save(

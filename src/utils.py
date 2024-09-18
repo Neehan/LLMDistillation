@@ -268,5 +268,4 @@ def calculate_perplexity(model, tokenizer, stride=512, max_length=2048):
     # Compute perplexity
     total_nll = torch.stack(nlls).sum()
     ppl = torch.exp(total_nll / total_tokens)
-    logging.info("Perplexity:", ppl.item())
     return ppl.item()

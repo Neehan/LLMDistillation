@@ -59,7 +59,7 @@ if __name__ == "__main__":
     for arg, value in vars(args).items():
         logging.info(f"Argument: {arg}, Value: {value}")
     teacher_model, tokenizer = load_model_and_tokenizer(args.model)
-    print(teacher_model)
+    logging.info(teacher_model)
     dataset_name = "datasets/github_code"
 
     distiller = PhiMatDistiller(
