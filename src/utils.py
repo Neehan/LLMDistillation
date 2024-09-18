@@ -138,7 +138,7 @@ def tokenize_and_save_dataset(
 
     logging.info(f"chunk size: {chunk_size}")
 
-    for example in tqdm(islice(iter(ds), 500_000), desc="Tokenizing dataset"):
+    for example in tqdm(islice(iter(ds), 100_000), desc="Tokenizing dataset"):
         buffer.append(example["code"])
         if len(buffer) == buffer_size:
             encodings_batch = tokenizer(

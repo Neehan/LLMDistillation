@@ -113,6 +113,17 @@ class BaseDistiller:
             losses = []
             i = 0
             for batch in train_encodings:
+
+                if i % 5000 == 4999:
+                    logging.info(f"layer {i}: calculating intermediate perplexity.")
+                    ppl = calculate_perplexity(
+                        self.student_model,
+                        DATA_DIR + self.dataset_name,
+                        stride=train_seq_len,
+                    )
+                    logging.info(f"Sudent model's ppl: {ppl:.3f}")
+                i += 1
+
                 try:
                     input_ids = batch["input_ids"].to(self.device)
                     attention_mask = batch["attention_mask"].to(self.device)
@@ -142,18 +153,8 @@ class BaseDistiller:
                     # remove the hooks else memory leak
                     self.remove_hooks()
                     raise e
-            i += 1
             avg_loss = sum(losses) / len(losses)
             logging.info(f"Average Loss: {avg_loss}")
-
-            if i % 5000 == 4999:
-                logging.info(f"layer {i}: calculating intermediate perplexity.")
-                ppl = calculate_perplexity(
-                    self.student_model,
-                    DATA_DIR + self.dataset_name,
-                    stride=train_seq_len,
-                )
-                logging.info(f"Sudent model's ppl: {ppl:.3f}")
 
         self.remove_hooks()  # training complete remove the hooks
 
