@@ -40,6 +40,7 @@ def load_coding_dataset(
     chunk_size=1 if TEST_ENV else 5000,
     batch_size=1,
     max_length=2048,
+    buffer_size=8192,
 ):
     """
     Load coding dataset either from pretokenized files or by tokenizing a new dataset.
@@ -54,12 +55,11 @@ def load_coding_dataset(
     Yields:
         torch.Tensor: A batch of tokenized input IDs.
     """
-    if os.path.exists(save_path) and os.listdir(save_path):
-        yield from load_encodings_from_files(save_path, batch_size)
-    else:
-        yield from tokenize_and_save_dataset(
-            tokenizer, save_path, chunk_size, batch_size, max_length
+    if not os.path.exists(save_path) or not os.listdir(save_path):
+        tokenize_and_save_dataset(
+            tokenizer, save_path, chunk_size, buffer_size, max_length
         )
+    yield from load_encodings_from_files(save_path, batch_size)
 
 
 def load_encodings_from_files(save_path, batch_size):
@@ -100,7 +100,9 @@ def load_encodings_from_files(save_path, batch_size):
         }
 
 
-def tokenize_and_save_dataset(tokenizer, save_path, chunk_size, batch_size, max_length):
+def tokenize_and_save_dataset(
+    tokenizer, save_path, chunk_size, buffer_size, max_length
+):
     """
     Tokenize a dataset and save the encodings to the specified path.
 
@@ -132,15 +134,13 @@ def tokenize_and_save_dataset(tokenizer, save_path, chunk_size, batch_size, max_
     os.makedirs(save_path, exist_ok=True)
     encodings = []
     chunk_counter = 0
-    batch_input_ids = []
-    batch_attention_mask = []
+    buffer = []
 
     logging.info(f"chunk size: {chunk_size}")
 
-    buffer = []
     for example in tqdm(islice(iter(ds), 500_000), desc="Tokenizing dataset"):
         buffer.append(example["code"])
-        if len(buffer) == batch_size:
+        if len(buffer) == buffer_size:
             encodings_batch = tokenizer(
                 buffer,
                 return_tensors="pt",
@@ -148,20 +148,7 @@ def tokenize_and_save_dataset(tokenizer, save_path, chunk_size, batch_size, max_
                 max_length=max_length,
                 padding=True,
             )
-            for input_ids, attention_mask in zip(
-                encodings_batch["input_ids"], encodings_batch["attention_mask"]
-            ):
-                batch_input_ids.append(input_ids.unsqueeze(0))
-                batch_attention_mask.append(attention_mask.unsqueeze(0))
-                if len(batch_input_ids) == batch_size:
-                    yield {
-                        "input_ids": torch.cat(batch_input_ids, dim=0),
-                        "attention_mask": torch.cat(batch_attention_mask, dim=0),
-                    }
-                    batch_input_ids = []
-                    batch_attention_mask = []
-
-            encodings.extend(encodings_batch["input_ids"])
+            encodings.extend(encodings_batch)
             buffer = []
 
         if len(encodings) >= chunk_size:
@@ -177,26 +164,7 @@ def tokenize_and_save_dataset(tokenizer, save_path, chunk_size, batch_size, max_
             max_length=max_length,
             padding=True,
         )
-        for input_ids, attention_mask in zip(
-            encodings_batch["input_ids"], encodings_batch["attention_mask"]
-        ):
-            batch_input_ids.append(input_ids.unsqueeze(0))
-            batch_attention_mask.append(attention_mask.unsqueeze(0))
-            if len(batch_input_ids) == batch_size:
-                yield {
-                    "input_ids": torch.cat(batch_input_ids, dim=0),
-                    "attention_mask": torch.cat(batch_attention_mask, dim=0),
-                }
-                batch_input_ids = []
-                batch_attention_mask = []
-
-        encodings.extend(encodings_batch["input_ids"])
-
-    if batch_input_ids:
-        yield {
-            "input_ids": torch.cat(batch_input_ids, dim=0),
-            "attention_mask": torch.cat(batch_attention_mask, dim=0),
-        }
+        encodings.extend(encodings_batch)
 
     if encodings:
         save_encodings_chunk(encodings, save_path, chunk_counter)
