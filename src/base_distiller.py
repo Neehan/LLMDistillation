@@ -26,12 +26,6 @@ class BaseDistiller:
     def get_model_layers(self, model):
         raise NotImplementedError("must be implemented by the children class")
 
-    def get_model_activation(self, model, layer_id):
-        """
-        get the model activation fn on layer with layer id
-        """
-        raise NotImplementedError("must be implemented by the children class")
-
     def get_model_mlp(self, model, layer_id):
         """
         get the model mlp layer on layer with layer id
@@ -77,10 +71,10 @@ class BaseDistiller:
         return extract_mlp_output_hook
 
     def register_hooks(self, layer_id):
-        self.teacher_hook = self.get_model_activation(
+        self.teacher_hook = self.get_model_mlp(
             self.teacher_model, layer_id
         ).register_forward_hook(self.create_mlp_output_hook(layer_id, is_teacher=True))
-        self.student_hook = self.get_model_activation(
+        self.student_hook = self.get_model_mlp(
             self.student_model, layer_id
         ).register_forward_hook(self.create_mlp_output_hook(layer_id, is_teacher=False))
 
@@ -119,6 +113,7 @@ class BaseDistiller:
 
         for epoch in range(epochs):
             losses = []
+            i = 0
             for encoding in train_encodings:
                 try:
                     batch = encoding.input_ids.to(self.device)
@@ -146,11 +141,11 @@ class BaseDistiller:
                     # remove the hooks else memory leak
                     self.remove_hooks()
                     raise e
-
+            i += 1
             avg_loss = sum(losses) / len(losses)
             logging.info(f"Average Loss: {avg_loss}")
 
-            if i % 2048 == 2047 or i == nsamples - 1:
+            if i % 2048 == 2047:
                 logging.info(f"layer {i}: calculating intermediate perplexity.")
                 ppl = calculate_perplexity(
                     self.student_model,

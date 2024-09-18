@@ -46,8 +46,12 @@ class MatDistiller(BaseDistiller):
         small_student_model_logits = self.student_model(input_ids=batch).logits
         small_student_mlp_outputs = self.student_mlp_outputs
 
-        loss1 = loss_fn(large_student_mlp_outputs, self.teacher_mlp_outputs)
-        loss2 = loss_fn(small_student_mlp_outputs, self.teacher_mlp_outputs)
+        loss1 = loss_fn(
+            large_student_mlp_outputs[layer_id], self.teacher_mlp_outputs[layer_id]
+        )
+        loss2 = loss_fn(
+            small_student_mlp_outputs[layer_id], self.teacher_mlp_outputs[layer_id]
+        )
 
         # keep mat dim to be small so that when ppl is calculated, it is
         # calculated from the small model

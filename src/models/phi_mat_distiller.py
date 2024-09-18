@@ -34,9 +34,6 @@ class PhiMatDistiller(MatDistiller):
     def get_model_layers(self, model):
         return model.model.layers
 
-    def get_model_activation(self, model, layer_id):
-        return model.model.layers[layer_id].mlp
-
     def get_model_mlp(self, model, layer_id):
         return model.model.layers[layer_id].mlp
 
