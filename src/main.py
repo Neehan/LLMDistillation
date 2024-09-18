@@ -1,9 +1,15 @@
 import argparse
-import progressive_distillation
-import full_distillation
-import matryoshka_distillation
-import full_matryoshka_distillation
-import constants
+import logging
+from src import constants
+from src.models import phi_mat_distiller
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%asctime)s][%(levelname)s]: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -13,25 +19,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model",
         help="the model to distill",
-        default="pythia-160",
+        default="microsoft/phi-1_5",
         type=str,
     )
-    parser.add_argument(
-        "--train-attn",
-        dest="train_attn",
-        action="store_true",
-        help="train the attention layer",
-    )
-    parser.set_defaults(train_attn=False)
 
     args = parser.parse_args()
-    model_path = constants.MODEL_PATHS[args.model]
 
-    if args.distill == "progressive":
-        progressive_distillation.main(model_path, args.train_attn)
-    elif args.distill == "mat":
-        matryoshka_distillation.main(model_path, args.train_attn)
-    elif args.distill == "fullmat":
-        full_matryoshka_distillation.main(model_path, args.train_attn)
-    else:
-        full_distillation.main(model_path, args.train_attn)
+    if args.distill == "mat":
+        phi_mat_distiller.training_loop(args.model, "datasets/python-github-code")
