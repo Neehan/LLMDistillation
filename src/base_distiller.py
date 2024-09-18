@@ -143,7 +143,7 @@ class BaseDistiller:
             avg_loss = sum(losses) / len(losses)
             logging.info(f"Average Loss: {avg_loss}")
 
-            if i % 100_000 == 99_999:
+            if i % 10_000 == 9_999:
                 logging.info(f"layer {i}: calculating intermediate perplexity.")
                 ppl = calculate_perplexity(
                     self.student_model,

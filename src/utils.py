@@ -37,7 +37,7 @@ def load_model_and_tokenizer(path):
 def load_coding_dataset(
     tokenizer,
     save_path=DATA_DIR + "datasets/github_code/encodings",
-    chunk_size=1 if TEST_ENV else 100_000,
+    chunk_size=1 if TEST_ENV else 10_000,
     batch_size=1,
     max_length=2048,
 ):
