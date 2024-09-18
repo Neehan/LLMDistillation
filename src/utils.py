@@ -242,7 +242,12 @@ def calculate_perplexity(model, tokenizer, stride=512, max_length=2048):
     # Evaluate the model on the dataset
     nsamples = (num_tokens - seqlen + stride) // stride  # Adjusted for overlap
 
-    for i in tqdm(range(nsamples), desc="Evaluating"):
+    for i in tqdm(
+        range(nsamples),
+        desc="Evaluating",
+        file=TQDM_OUTPUT,
+        mininterval=MIN_INTERVAL_SEC,
+    ):
         start_idx = i * stride
         end_idx = start_idx + seqlen
         batch = input_ids[:, start_idx:end_idx]
