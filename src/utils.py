@@ -241,7 +241,7 @@ def calculate_perplexity(model, save_path, stride=512, max_length=2048):
         range(0, input_ids.size(0), l_stride),
         desc="Perplexity:",
         file=TQDM_OUTPUT,
-        mininterval=1,
+        mininterval=MIN_INTERVAL_SEC,
     ):
         begin_loc = max(i + l_stride - max_length, 0)
         end_loc = i + l_stride
