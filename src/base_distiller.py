@@ -114,7 +114,7 @@ class BaseDistiller:
             i = 0
             for batch in train_encodings:
 
-                if i % 5000 == 4999:
+                if i % 5000 == 0:
                     logging.info(f"layer {i}: calculating intermediate perplexity.")
                     ppl = calculate_perplexity(
                         self.student_model,
