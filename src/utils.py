@@ -204,7 +204,7 @@ def save_encodings_chunk(encodings, save_path, chunk_counter):
     torch.save(encodings, chunk_save_path)
 
 
-def calculate_perplexity(model, save_path, stride=512, max_length=2048):
+def calculate_perplexity(model, save_path, stride=512, max_length=2048, n_files=50):
     """
     Calculate the perplexity of the model over the dataset.
 
@@ -229,8 +229,8 @@ def calculate_perplexity(model, save_path, stride=512, max_length=2048):
     total_length = 0
 
     encodings = torch.load(encoding_file, weights_only=False)
-    input_ids_list = [e["input_ids"] for e in encodings]
-    attention_masks_list = [e["attention_mask"] for e in encodings]
+    input_ids_list = [e["input_ids"] for e in encodings[:n_files]]
+    attention_masks_list = [e["attention_mask"] for e in encodings[:n_files]]
 
     # Concatenate all input_ids and attention masks
     input_ids = torch.cat(input_ids_list, dim=0)
