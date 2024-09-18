@@ -115,7 +115,7 @@ class BaseDistiller:
                     logging.info(f"layer {i}: calculating intermediate perplexity.")
                     ppl = calculate_perplexity(
                         self.student_model,
-                        DATA_DIR + self.dataset_name,
+                        self.tokenizer,
                     )
                     logging.info(f"Sudent model's ppl: {ppl:.3f}")
                 i += 1

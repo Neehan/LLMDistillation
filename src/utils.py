@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 from tqdm import tqdm
 import logging
 import os
@@ -204,61 +205,63 @@ def save_encodings_chunk(encodings, save_path, chunk_counter):
     torch.save(encodings, chunk_save_path)
 
 
-def calculate_perplexity(model, save_path, stride=512, max_length=2048, n_files=50):
-    """
-    Calculate the perplexity of the model over the dataset.
+def calculate_perplexity(model, tokenizer, stride=512, max_length=2048):
+    # Load the dataset
+    ds = datasets.load_dataset(
+        "codeparrot/github-code",
+        streaming=True,
+        split="train",
+        languages=["Python"],
+        filter_languages=True,
+        filter_licenses=True,
+        licenses=["mit", "isc"],
+        trust_remote_code=True,
+        # Ensure DATA_DIR is defined or replace it with the desired cache directory
+        cache_dir=DATA_DIR + "datasets/",
+    )
 
-    Args:
-        model: The language model.
-        save_path (str): The path to the directory containing the encoding files.
-        stride (int): The stride size for the sliding window.
+    # Collect the text data
+    texts = []
+    for example in tqdm(islice(iter(ds), 100), desc="Loading dataset"):
+        texts.append(example["code"])
 
-    Returns:
-        float: The calculated perplexity.
-    """
+    encodings = tokenizer("\n\n".join(texts), return_tensors="pt")
+    input_ids = encodings["input_ids"].to(model.device)
+
+    # Set sequence length and compute the number of samples
+    seqlen = max_length
+    num_tokens = input_ids.size(1)  # Assuming input_ids shape is [1, num_tokens]
+    nsamples = (num_tokens + seqlen - 1) // seqlen  # Ceiling division
+
+    # Prepare the model
     model.eval()
-    encodings_dir = os.path.join(save_path, "encodings")
-    encoding_file = sorted(
-        [
-            os.path.join(encodings_dir, f)
-            for f in os.listdir(encodings_dir)
-            if f.endswith(".pt")
-        ]
-    )[0]
     nlls = []
-    total_length = 0
+    total_tokens = 0
+    loss_fct = nn.CrossEntropyLoss(reduction="sum")
 
-    encodings = torch.load(encoding_file, weights_only=False)
-    input_ids_list = [e["input_ids"] for e in encodings[:n_files]]
-    attention_masks_list = [e["attention_mask"] for e in encodings[:n_files]]
+    # Evaluate the model on the dataset
+    nsamples = (num_tokens - seqlen + stride) // stride  # Adjusted for overlap
 
-    # Concatenate all input_ids and attention masks
-    input_ids = torch.cat(input_ids_list, dim=0).squeeze()
-    attention_masks = torch.cat(attention_masks_list, dim=0).squeeze()
-    l_stride = stride
-
-    for i in tqdm(range(0, input_ids.size(0), l_stride), desc="Perplexity:"):
-        begin_loc = max(i + l_stride - max_length, 0)
-        end_loc = i + l_stride
-        trg_len = end_loc - i  # Number of tokens to predict
-        input_ids_slice = input_ids[begin_loc:end_loc]
-        attention_mask_slice = attention_masks[begin_loc:end_loc]
-        labels = input_ids_slice.clone()
-        labels[:-trg_len] = -100  # Mask tokens not to predict
-
-        # Ensure proper device placement
-        input_ids_slice = input_ids_slice.unsqueeze(0).to(model.device)
-        attention_mask_slice = attention_mask_slice.unsqueeze(0).to(model.device)
-        labels = labels.unsqueeze(0).to(model.device)
+    for i in tqdm(range(nsamples), desc="Evaluating"):
+        start_idx = i * stride
+        end_idx = start_idx + seqlen
+        batch = input_ids[:, start_idx:end_idx]
 
         with torch.no_grad():
-            outputs = model(
-                input_ids_slice, attention_mask=attention_mask_slice, labels=labels
-            )
-            neg_log_likelihood = outputs.loss * trg_len
+            outputs = model(batch)
+            lm_logits = outputs.logits
 
-        nlls.append(neg_log_likelihood)
-        total_length += trg_len
+        shift_logits = lm_logits[:, :-1, :].contiguous()
+        shift_labels = batch[:, 1:]
 
-    ppl = torch.exp(torch.stack(nlls).sum() / total_length)
+        loss = loss_fct(
+            shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1)
+        )
+        nlls.append(loss.float())
+        total_tokens += shift_labels.numel()
+
+    # Compute perplexity
+    total_nll = torch.stack(nlls).sum()
+    ppl = torch.exp(total_nll / total_tokens)
+    logging.info("Perplexity:", ppl.item())
     return ppl.item()
