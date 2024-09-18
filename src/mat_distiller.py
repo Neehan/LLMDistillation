@@ -33,23 +33,29 @@ class MatDistiller(BaseDistiller):
         # matriyoshka always uses small matrix unless specified
         self.hidden_dim_list = [mat_dim] * self.num_layers
 
-    def compute_loss(self, layer_id, batch, loss_fn):
+    def compute_loss(self, layer_id, input_ids, attention_mask, loss_fn):
 
         # set matryoshka dim to be none, using full matrix
         self.hidden_dim_list[layer_id] = None
 
         # Implement logic to compute the loss for the given batch
         with torch.no_grad():
-            teacher_model_logits = self.teacher_model(input_ids=batch).logits
+            teacher_model_logits = self.teacher_model(
+                input_ids=input_ids, attention_mask=attention_mask
+            ).logits
 
         teacher_mlp_output = self.teacher_mlp_outputs[layer_id]
 
-        large_student_model_logits = self.student_model(input_ids=batch).logits
+        large_student_model_logits = self.student_model(
+            input_ids=input_ids, attention_mask=attention_mask
+        ).logits
         large_student_mlp_output = self.student_mlp_outputs[layer_id]
 
         # set matryoshka dim to be mat_dim, using the small matrix
         self.hidden_dim_list[layer_id] = self.mat_dim
-        small_student_model_logits = self.student_model(input_ids=batch).logits
+        small_student_model_logits = self.student_model(
+            input_ids=input_ids, attention_mask=attention_mask
+        ).logits
         small_student_mlp_output = self.student_mlp_outputs[layer_id]
 
         loss1 = loss_fn(large_student_mlp_output, teacher_mlp_output)

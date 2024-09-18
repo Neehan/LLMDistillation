@@ -52,7 +52,7 @@ class BaseDistiller:
         #     if f"model.layers.{layer_id}.mlp" not in name:
         #         param.requires_grad = False
 
-    def compute_loss(self, layer_id, batch, loss_fn):
+    def compute_loss(self, layer_id, input_ids, attention_mask, loss_fn):
         raise NotImplementedError("must be implemented by the children class")
 
     def create_mlp_output_hook(self, layer_id, is_teacher):
@@ -114,20 +114,23 @@ class BaseDistiller:
             i = 0
             for batch in train_encodings:
                 try:
-                    batch = batch.to(self.device)
+                    input_ids = batch["input_ids"].to(self.device)
+                    attention_mask = batch["attention_mask"].to(self.device)
                     optimizer.zero_grad()
 
                     if torch.cuda.is_available():
                         with autocast("cuda"):
-                            self.student_model(input_ids=batch)
                             # hook saves the intermediate outputs to self.student_mlp_outputs
-                            loss = self.compute_loss(layer_id, batch, loss_fn=loss_fn)
+                            loss = self.compute_loss(
+                                layer_id, input_ids, attention_mask, loss_fn=loss_fn
+                            )
                         self.scaler.scale(loss).backward()
                         self.scaler.step(optimizer)
                         self.scaler.update()
                     else:
-                        self.student_model(input_ids=batch)
-                        loss = self.compute_loss(layer_id, batch, loss_fn=loss_fn)
+                        loss = self.compute_loss(
+                            layer_id, input_ids, attention_mask, loss_fn=loss_fn
+                        )
                         loss.backward()
                         optimizer.step()
 
