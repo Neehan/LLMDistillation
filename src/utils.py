@@ -81,10 +81,12 @@ def load_encodings_from_files(save_path, batch_size):
     batch_input_ids = []
     batch_attention_mask = []
     for encoding_file in tqdm(
-        encoding_files, desc="Training", file=TQDM_OUTPUT, mininterval=MIN_INTERVAL_SEC
+        encoding_files, desc="Chunks", file=TQDM_OUTPUT, mininterval=MIN_INTERVAL_SEC
     ):
         encodings = torch.load(encoding_file, weights_only=False)
-        for encoding in encodings:
+        for encoding in tqdm(
+            encodings, desc="Training", file=TQDM_OUTPUT, mininterval=MIN_INTERVAL_SEC
+        ):
             batch_input_ids.append(encoding["input_ids"].unsqueeze(0))
             batch_attention_mask.append(encoding["attention_mask"].unsqueeze(0))
             if len(batch_input_ids) == batch_size:
