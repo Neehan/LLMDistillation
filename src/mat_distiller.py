@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from src.base_distiller import BaseDistiller
+from torch.utils.checkpoint import checkpoint
 
 
 class MatryoshkaMLP(nn.Module):
@@ -20,10 +21,10 @@ class MatryoshkaMLP(nn.Module):
     def forward(self, x):
         current_hidden_dim = self.hidden_dim_list[self.layer_id]
         if current_hidden_dim is not None:
-            return self._mat_forward(x)
+            return checkpoint(self._mat_forward, x)
         else:
             # Use the full MLP as is
-            x = self.original_mlp(x)
+            x = checkpoint(self.original_mlp, x)
         return x
 
 
