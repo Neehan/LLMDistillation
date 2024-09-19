@@ -105,12 +105,11 @@ class BaseDistiller:
         - lr (float): The learning rate for optimization (default is 0.0004).
         """
         self.prepare_student_model(layer_id)
-        self.student_model = self.student_model.to(self.device).to(torch.float32)
+        self.student_model = self.student_model.to(self.device)
         # self.register_hooks(layer_id)
 
         # Get only the MLP layer parameters for the specified layer_id
         mlp_parameters = self.get_model_mlp(self.student_model, layer_id).parameters()
-
         # Set up the optimizer to only train the MLP layer's parameters
         optimizer = torch.optim.Adam(mlp_parameters, lr=lr)
 
@@ -157,14 +156,22 @@ class BaseDistiller:
                     attention_mask = batch["attention_mask"].to(self.device)
                     optimizer.zero_grad()
 
-                    with autocast(device_type=device_str, dtype=MODEL_PRECISION):
-                        # hook saves the intermediate outputs to self.student_mlp_outputs
+                    if MODEL_PRECISION == torch.float16:
+                        # need to use autocast and it uses 1x memory
+                        self.student_model = self.student_model.to(torch.float32)
+                        with autocast(device_type=device_str, dtype=MODEL_PRECISION):
+                            # hook saves the intermediate outputs to self.student_mlp_outputs
+                            loss = self.compute_loss(
+                                layer_id, input_ids, attention_mask, loss_fn=loss_fn
+                            )
+                        scaler.scale(loss).backward()
+                        scaler.step(optimizer)
+                        scaler.update()
+                    else:  # bfloat16 is safer and can be autocasted directly
                         loss = self.compute_loss(
                             layer_id, input_ids, attention_mask, loss_fn=loss_fn
                         )
-                    scaler.scale(loss).backward()
-                    scaler.step(optimizer)
-                    scaler.update()
+                        loss.backward()
 
                 except Exception as e:
                     logging.error("GOT AN EXCEPTION")

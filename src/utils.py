@@ -102,7 +102,8 @@ def load_encodings_from_files(save_path, batch_size):
                 }
                 batch_input_ids = []
                 batch_attention_mask = []
-                break
+                if TEST_ENV:  # only one iteration for testing purposes
+                    break
     if batch_input_ids:
         yield {
             "input_ids": torch.cat(batch_input_ids, dim=0),
@@ -226,8 +227,6 @@ def calculate_perplexity(model, tokenizer, stride=512, max_length=2048):
         cache_dir=DATA_DIR + "datasets/",
     )
 
-    return -1.0
-
     # Collect the text data
     texts = []
     for example in tqdm(islice(iter(ds), 100), desc="Loading dataset"):
@@ -272,6 +271,9 @@ def calculate_perplexity(model, tokenizer, stride=512, max_length=2048):
         )
         nlls.append(loss.float())
         total_tokens += shift_labels.numel()
+
+        if TEST_ENV:  # only one iteration for testing purposes
+            break
 
     # Compute perplexity
     total_nll = torch.stack(nlls).sum()

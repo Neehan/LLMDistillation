@@ -3,8 +3,8 @@ import logging
 import torch.nn.functional as F
 from src.mat_distiller import MatDistiller, MatryoshkaMLP
 from src.training_loop import training_loop
-from src.utils import load_model_and_tokenizer
 from src.argparser import parser
+import torch
 
 
 class PhiMatMLP(MatryoshkaMLP):

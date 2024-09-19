@@ -1,7 +1,7 @@
 import logging
 import torch
 import torch.nn as nn
-from src.constants import DATA_DIR, MODEL_PRECISION
+from src.constants import DATA_DIR, MODEL_PRECISION, TEST_ENV
 from src import utils
 import gc
 from src.base_distiller import BaseDistiller
@@ -52,11 +52,12 @@ def training_loop(distiller_factory: BaseDistiller, args, distiller_kwargs):
         logging.info("loaded the dataset")
 
         # calculate the ppl of the teacher model first
-        # ppl = utils.calculate_perplexity(
-        #     distiller.teacher_model,
-        #     distiller.tokenizer,
-        # )
-        # logging.info(f"Teacher model {layer_id} ppl: {ppl:.3f}")
+        if not TEST_ENV:
+            ppl = utils.calculate_perplexity(
+                distiller.teacher_model,
+                distiller.tokenizer,
+            )
+            logging.info(f"Teacher model {layer_id} ppl: {ppl:.3f}")
 
         logging.info(f"Training student model {layer_id}.")
 
