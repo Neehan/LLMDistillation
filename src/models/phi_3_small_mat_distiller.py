@@ -49,7 +49,7 @@ class Phi3SmallMatMLP(MatryoshkaMLP):
         )
 
         # Apply the gegelu activation function with the given limit
-        x = _gegelu(x, limit=self.gegelu_limit)
+        x = _gegelu(x, limit=self.original_mlp.gegelu_limit)
 
         # Apply the second linear projection (down_proj), and slice the weights accordingly
         x = F.linear(

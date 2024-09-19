@@ -5,9 +5,11 @@ from src.mat_distiller import MatDistiller, MatryoshkaMLP
 from src.training_loop import training_loop
 from src.argparser import parser
 import torch
+import torch.jit
 
 
 class PhiMatMLP(MatryoshkaMLP):
+    @torch.jit.script
     def _mat_forward(self, x):
         hidden_dim = (
             self.hidden_dim_list[self.layer_id]
