@@ -108,7 +108,7 @@ class BaseDistiller:
         for epoch in range(epochs):
             losses = []
             for batch_idx, batch in enumerate(train_encodings):
-                if batch_idx % 25 == 24:
+                if batch_idx % 50 == 24:
                     logging.info(
                         f"layer {layer_id}: calculating intermediate perplexity."
                     )

@@ -79,6 +79,9 @@ def load_encodings_from_files(save_path, batch_size):
     encoding_files = sorted(
         [os.path.join(save_path, f) for f in os.listdir(save_path) if f.endswith(".pt")]
     )
+    # skip the first one cause we ppl test on it
+    assert len(encoding_files) > 1, "must tokenize at least 2 chunks"
+    encoding_files = encoding_files[1:]
     batch_input_ids = []
     batch_attention_mask = []
     for encoding_file in tqdm(
