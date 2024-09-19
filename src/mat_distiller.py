@@ -66,13 +66,13 @@ class MatDistiller(BaseDistiller):
         # calculated from the small model
 
         # also add final two layers outputs
-        kl_loss_fn = torch.nn.KLDivLoss(reduction="batchmean")
-        loss3 = kl_loss_fn(
+        # kl_loss_fn = torch.nn.KLDivLoss(reduction="batchmean")
+        loss3 = loss_fn(
             F.log_softmax(large_student_model_logits, dim=-1),
             F.softmax(teacher_model_logits, dim=-1),
         )
 
-        loss4 = kl_loss_fn(
+        loss4 = loss_fn(
             F.log_softmax(small_student_model_logits, dim=-1),
             F.softmax(teacher_model_logits, dim=-1),
         )
