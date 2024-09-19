@@ -61,10 +61,10 @@ def load_coding_dataset(
         tokenize_and_save_dataset(
             tokenizer, save_path, chunk_size, buffer_size, max_length
         )
-    yield from load_encodings_from_files(save_path, batch_size)
+    yield from load_encodings_from_files(save_path, batch_size, max_length)
 
 
-def load_encodings_from_files(save_path, batch_size):
+def load_encodings_from_files(save_path, batch_size, max_length):
     """
     Load pretokenized encodings from files in the specified directory.
 
@@ -93,8 +93,10 @@ def load_encodings_from_files(save_path, batch_size):
         for encoding in tqdm(
             encodings, desc="Training", file=TQDM_OUTPUT, mininterval=MIN_INTERVAL_SEC
         ):
-            batch_input_ids.append(encoding["input_ids"].unsqueeze(0))
-            batch_attention_mask.append(encoding["attention_mask"].unsqueeze(0))
+            batch_input_ids.append(encoding["input_ids"][:max_length].unsqueeze(0))
+            batch_attention_mask.append(
+                encoding["attention_mask"][:max_length].unsqueeze(0)
+            )
             if len(batch_input_ids) == batch_size:
                 yield {
                     "input_ids": torch.cat(batch_input_ids, dim=0),
