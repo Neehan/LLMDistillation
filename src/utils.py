@@ -149,7 +149,9 @@ def tokenize_and_save_dataset(
 
     logging.info(f"chunk size: {chunk_size}")
 
-    for example in tqdm(islice(iter(ds), 20_000), desc="Tokenizing dataset"):
+    for example in tqdm(
+        islice(iter(ds), 20_000), desc="Tokenizing dataset", file=TQDM_OUTPUT
+    ):
         buffer.append(example["code"])
         if len(buffer) == buffer_size:
             encodings_batch = tokenizer(
@@ -231,7 +233,9 @@ def calculate_perplexity(model, tokenizer, stride=512, max_length=2048):
     )
     # Collect the text data
     texts = []
-    for example in tqdm(islice(iter(ds), 100), desc="Loading dataset"):
+    for example in tqdm(
+        islice(iter(ds), 100), desc="Loading dataset", file=TQDM_OUTPUT
+    ):
         texts.append(example["code"])
 
     encodings = tokenizer("\n\n".join(texts), return_tensors="pt")
