@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from torch.amp import autocast
 from tqdm import tqdm
 import logging
 import os
@@ -228,7 +229,6 @@ def calculate_perplexity(model, tokenizer, stride=512, max_length=2048):
         # Ensure DATA_DIR is defined or replace it with the desired cache directory
         cache_dir=DATA_DIR + "datasets/",
     )
-
     # Collect the text data
     texts = []
     for example in tqdm(islice(iter(ds), 100), desc="Loading dataset"):
@@ -250,10 +250,11 @@ def calculate_perplexity(model, tokenizer, stride=512, max_length=2048):
 
     # Evaluate the model on the dataset
     nsamples = (num_tokens - seqlen + stride) // stride  # Adjusted for overlap
+    device_str = "cuda" if torch.cuda.is_available() else "cpu"
 
     for i in tqdm(
         range(nsamples),
-        desc="Evaluating",
+        desc="Perplexity",
         file=TQDM_OUTPUT,
         mininterval=MIN_INTERVAL_SEC,
     ):
@@ -262,8 +263,9 @@ def calculate_perplexity(model, tokenizer, stride=512, max_length=2048):
         batch = input_ids[:, start_idx:end_idx]
 
         with torch.no_grad():
-            outputs = model(batch)
-            lm_logits = outputs.logits
+            with autocast(device_type=device_str, dtype=MODEL_PRECISION):
+                outputs = model(batch)
+                lm_logits = outputs.logits
 
         shift_logits = lm_logits[:, :-1, :].contiguous()
         shift_labels = batch[:, 1:]

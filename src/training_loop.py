@@ -49,12 +49,12 @@ def training_loop(distiller_factory: BaseDistiller, args, distiller_kwargs):
         logging.info("loaded the dataset")
 
         # calculate the ppl of the teacher model first
-        if not TEST_ENV:
-            ppl = utils.calculate_perplexity(
-                distiller.teacher_model,
-                distiller.tokenizer,
-            )
-            logging.info(f"Teacher model {layer_id} ppl: {ppl:.3f}")
+
+        ppl = utils.calculate_perplexity(
+            distiller.teacher_model,
+            distiller.tokenizer,
+        )
+        logging.info(f"Teacher model {layer_id} ppl: {ppl:.3f}")
 
         logging.info(f"Training student model {layer_id}.")
 

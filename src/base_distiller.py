@@ -140,14 +140,14 @@ class BaseDistiller:
                         # student is very close to the teacher so stop early
                         break
 
-                    if last_student_ppl is None:
-                        last_student_ppl = student_ppl
-                    elif last_student_ppl < student_ppl:
+                    if last_student_ppl is not None and last_student_ppl < student_ppl:
                         # stop early because the student is getting worse
                         logging.info(
                             f"stopping early because last student ppl ({last_student_ppl:3f}) was better than current student ppl ({student_ppl:.3f})"
                         )
                         break
+                    else:
+                        last_student_ppl = student_ppl
 
                 try:
                     self.teacher_model.eval()
