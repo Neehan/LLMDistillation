@@ -62,6 +62,13 @@ if __name__ == "__main__":
         type=str,
     )
 
+    parser.add_argument(
+        "--num_layers",
+        help="the number of layers in the model",
+        default=24,
+        type=int,
+    )
+
     args = parser.parse_args()
     for arg, value in vars(args).items():
         logging.info(f"Argument: {arg}, Value: {value}")

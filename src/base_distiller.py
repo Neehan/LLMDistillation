@@ -183,13 +183,6 @@ class BaseDistiller:
             logging.info(f"Average Loss: {avg_loss}")
 
         # self.remove_hooks()  # training complete remove the hooks
-
-        print(f"{layer_id} teacher model:")
-        print(self.teacher_model)
-
-        print(f"{layer_id} student model:")
-        print(self.student_model)
-
         # turn on gradients following the teacher model
         for teacher_param, student_param in zip(
             self.teacher_model.parameters(), self.student_model.parameters()

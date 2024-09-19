@@ -18,20 +18,19 @@ def training_loop(distiller_factory: BaseDistiller, args, distiller_kwargs):
     num_epochs = args.num_epochs
     max_seq_len = args.max_seq_len
     batch_size = args.batch_size
+    n_layers = args.num_layers
+
+    logging.info(f"params not in training precision: {MODEL_PRECISION} bits")
 
     teacher_model, tokenizer = load_model_and_tokenizer(args.model)
     logging.info(teacher_model)
     dataset_name = "datasets/github_code"
 
-    logging.info(f"params not in training precision: {MODEL_PRECISION} bits")
-
-    distiller = distiller_factory(
-        teacher_model, tokenizer, dataset_name=dataset_name, **distiller_kwargs
-    )
-
-    n_layers = distiller.num_layers
-
     for layer_id in range(n_layers - 2, 0, -1):
+        distiller = distiller_factory(
+            teacher_model, tokenizer, dataset_name=dataset_name, **distiller_kwargs
+        )
+
         # Load the dataset each time cause it's a generator under the hood
         train_encodings = utils.load_coding_dataset(
             tokenizer=distiller.tokenizer, batch_size=batch_size, max_length=max_seq_len
@@ -40,11 +39,11 @@ def training_loop(distiller_factory: BaseDistiller, args, distiller_kwargs):
         logging.info("loaded the dataset")
 
         # calculate the ppl of the teacher model first
-        ppl = utils.calculate_perplexity(
-            distiller.teacher_model,
-            distiller.tokenizer,
-        )
-        logging.info(f"Teacher model {layer_id} ppl: {ppl:.3f}")
+        # ppl = utils.calculate_perplexity(
+        #     distiller.teacher_model,
+        #     distiller.tokenizer,
+        # )
+        # logging.info(f"Teacher model {layer_id} ppl: {ppl:.3f}")
 
         logging.info(f"Training student model {layer_id}.")
 
@@ -57,17 +56,16 @@ def training_loop(distiller_factory: BaseDistiller, args, distiller_kwargs):
             lr=lr,
         )
 
+        del teacher_model
+        del distiller
+        # make current student the new teacher and create a new distiller
+        teacher_model = student_model
+
         # Save the model state dictionary
         # torch.save(
         #     student_model,
         #     DATA_DIR + "llm_cache/model" + f"_matryoshka_student_{layer_id}.pth",
         # )
-
-        # make current student the new teacher and create a new distiller
-        teacher_model = student_model
-        distiller = distiller_factory(
-            teacher_model, tokenizer, dataset_name=dataset_name, **distiller_kwargs
-        )
 
         gc.collect()  # Encourage garbage collector to release unreferenced memory
         if torch.cuda.is_available():

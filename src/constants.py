@@ -57,10 +57,4 @@ else:
 
 TQDM_OUTPUT = TqdmToLogger(logging.getLogger(), level=logging.INFO)
 
-MODEL_PATHS = {
-    "phi1.5": "llm_cache/models--microsoft--phi-1_5",
-    "gpt2": "llm_cache/gpt2",
-    "pythia-160": "llm_cache/pythia-160m",
-}
-
 MIN_INTERVAL_SEC = 2 * 60
