@@ -81,7 +81,9 @@ def load_encodings_from_files(save_path, batch_size):
     )
     # skip the first one cause we ppl test on it
     assert len(encoding_files) > 1, "must tokenize at least 2 chunks"
-    encoding_files = encoding_files[1:]
+    encoding_files = encoding_files[
+        1:2
+    ]  # use one chunk for training during early experiments
     batch_input_ids = []
     batch_attention_mask = []
     for encoding_file in tqdm(
@@ -142,7 +144,7 @@ def tokenize_and_save_dataset(
 
     logging.info(f"chunk size: {chunk_size}")
 
-    for example in tqdm(islice(iter(ds), 100_000), desc="Tokenizing dataset"):
+    for example in tqdm(islice(iter(ds), 20_000), desc="Tokenizing dataset"):
         buffer.append(example["code"])
         if len(buffer) == buffer_size:
             encodings_batch = tokenizer(
