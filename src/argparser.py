@@ -12,7 +12,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--lr",
     help="learning rate for the optimizer",
-    default=0.0004,
+    default=0.0008,
     type=float,
 )
 parser.add_argument(

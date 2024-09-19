@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from src.base_distiller import BaseDistiller
 
 
@@ -58,14 +59,23 @@ class MatDistiller(BaseDistiller):
         ).logits
         small_student_mlp_output = self.student_mlp_outputs[layer_id]
 
-        loss1 = loss_fn(large_student_mlp_output, teacher_mlp_output)
-        loss2 = loss_fn(small_student_mlp_output, teacher_mlp_output)
+        # loss1 = loss_fn(large_student_mlp_output, teacher_mlp_output)
+        # loss2 = loss_fn(small_student_mlp_output, teacher_mlp_output)
 
         # keep mat dim to be small so that when ppl is calculated, it is
         # calculated from the small model
 
         # also add final two layers outputs
-        # loss3 = loss_fn(teacher_model_logits, full_student_model_logits)
-        # loss4 = loss_fn(teacher_model_logits, small_student_model_logits)
+        kl_loss_fn = torch.nn.KLDivLoss(reduction="batchmean")
+        loss3 = kl_loss_fn(
+            F.log_softmax(large_student_model_logits, dim=-1),
+            F.softmax(teacher_model_logits, dim=-1),
+        )
 
-        return loss1 + loss2  # + (loss3 + loss4) * 0.01
+        loss4 = kl_loss_fn(
+            F.log_softmax(small_student_model_logits, dim=-1),
+            F.softmax(teacher_model_logits, dim=-1),
+        )
+
+        # return loss1 + loss2  # + (loss3 + loss4) * 0.01
+        return loss3 + loss4
