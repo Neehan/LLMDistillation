@@ -16,7 +16,6 @@ class BaseDistiller:
         self.student_model = None
         self.teacher_hook = None
         self.student_hook = None
-        self.scaler = GradScaler("cuda") if torch.cuda.is_available() else None
         self.num_layers = len(self.get_model_layers(teacher_model))
         self.teacher_mlp_outputs = [None] * self.num_layers
         self.student_mlp_outputs = [None] * self.num_layers
@@ -115,6 +114,9 @@ class BaseDistiller:
         # Set up the optimizer to only train the MLP layer's parameters
         optimizer = torch.optim.Adam(mlp_parameters, lr=lr)
 
+        device_str = "cuda" if torch.cuda.is_available() else "cpu"
+        scaler = GradScaler(device_str)
+
         last_student_ppl = None
         for epoch in range(epochs):
             losses = []
@@ -155,23 +157,14 @@ class BaseDistiller:
                     attention_mask = batch["attention_mask"].to(self.device)
                     optimizer.zero_grad()
 
-                    if torch.cuda.is_available():
-                        with autocast("cuda"):
-                            # hook saves the intermediate outputs to self.student_mlp_outputs
-                            loss = self.compute_loss(
-                                layer_id, input_ids, attention_mask, loss_fn=loss_fn
-                            )
-                        self.scaler.scale(loss).backward()
-                        self.scaler.step(optimizer)
-                        self.scaler.update()
-                #             else:
-                #                 loss = self.compute_loss(
-                #                     layer_id, input_ids, attention_mask, loss_fn=loss_fn
-                #                 )
-                #                 loss.backward()
-                #                 optimizer.step()
-
-                #             losses.append(loss.item())
+                    with autocast(device_type=device_str, dtype=MODEL_PRECISION):
+                        # hook saves the intermediate outputs to self.student_mlp_outputs
+                        loss = self.compute_loss(
+                            layer_id, input_ids, attention_mask, loss_fn=loss_fn
+                        )
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
 
                 except Exception as e:
                     logging.error("GOT AN EXCEPTION")
