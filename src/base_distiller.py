@@ -108,17 +108,15 @@ class BaseDistiller:
 
         for epoch in range(epochs):
             losses = []
-            i = 0
-            for batch in train_encodings:
+            for i, batch in enumerate(train_encodings):
 
-                if i % 5000 == 2500:
+                if i == 500:
                     logging.info(f"layer {i}: calculating intermediate perplexity.")
                     ppl = calculate_perplexity(
                         self.student_model,
                         self.tokenizer,
                     )
                     logging.info(f"Sudent model's ppl: {ppl:.3f}")
-                i += 1
 
                 try:
                     self.teacher_model.eval()
