@@ -3,32 +3,64 @@ import logging
 import torch.nn.functional as F
 from src.mat_distiller import MatDistiller, MatryoshkaMLP
 from src.training_loop import training_loop
-from src.utils import load_model_and_tokenizer
 from src.argparser import parser
+import torch
+from typing import Optional
 
 
-class PhiMatMLP(MatryoshkaMLP):
+# copied from phi-3-small-8k model's script
+@torch.jit.script
+def _quick_gelu(x):
+    return x * torch.sigmoid(1.702 * x)
+
+
+@torch.jit.script
+def _gegelu(input, limit: Optional[float] = None):
+    a_gelu, a_linear = input[..., ::2], input[..., 1::2]
+    if limit is not None:
+        a_gelu = torch.where(
+            torch.isinf(a_gelu), a_gelu, a_gelu.clamp(min=None, max=limit)
+        )
+        a_linear = torch.where(
+            torch.isinf(a_linear), a_linear, a_linear.clamp(min=-limit, max=limit)
+        )
+    out_gelu = _quick_gelu(a_gelu)
+    return out_gelu * (a_linear + 1)
+
+
+class Phi3SmallMatMLP(MatryoshkaMLP):
     def _mat_forward(self, x):
+        # Get the hidden dimension for the current layer, or default to the original MLP dimensions
         hidden_dim = (
             self.hidden_dim_list[self.layer_id]
             if self.hidden_dim_list[self.layer_id] is not None
-            else self.original_mlp.fc1.out_features
+            else self.original_mlp.up_proj.out_features
         )
+
+        # Apply the first linear projection (up_proj) and slice the weights
         x = F.linear(
             x,
-            self.original_mlp.fc1.weight[:hidden_dim, :],
+            self.original_mlp.up_proj.weight[: hidden_dim * 2, :],
             (
-                self.original_mlp.fc1.bias[:hidden_dim]
-                if self.original_mlp.fc1.bias is not None
+                self.original_mlp.up_proj.bias[: hidden_dim * 2]
+                if self.original_mlp.up_proj.bias is not None
                 else None
             ),
         )
-        x = self.original_mlp.activation_fn(x)
+
+        # Apply the gegelu activation function with the given limit
+        x = _gegelu(x, limit=self.gegelu_limit)
+
+        # Apply the second linear projection (down_proj), and slice the weights accordingly
         x = F.linear(
             x,
-            self.original_mlp.fc2.weight[:, :hidden_dim],
-            self.original_mlp.fc2.bias,  # Bias doesn't need to be sliced for the second layer
+            self.original_mlp.down_proj.weight[:, :hidden_dim],
+            self.original_mlp.down_proj.bias,  # Bias does not need slicing in this layer
         )
+
+        # Apply the dropout after down_proj
+        x = self.original_mlp.dropout(x)
+
         return x
 
 
@@ -41,7 +73,7 @@ class PhiMatDistiller(MatDistiller):
 
     def prepare_student_model(self, layer_id):
         self.student_model = copy.deepcopy(self.teacher_model)
-        self.student_model.model.layers[layer_id].mlp = PhiMatMLP(
+        self.student_model.model.layers[layer_id].mlp = Phi3SmallMatMLP(
             self.student_model.model.layers[layer_id].mlp,
             self.hidden_dim_list,
             layer_id,
@@ -62,23 +94,18 @@ if __name__ == "__main__":
         type=str,
     )
 
+    parser.add_argument(
+        "--num_layers",
+        help="the number of layers in the model",
+        default=32,
+        type=int,
+    )
+
     args = parser.parse_args()
     for arg, value in vars(args).items():
         logging.info(f"Argument: {arg}, Value: {value}")
-    teacher_model, tokenizer = load_model_and_tokenizer(args.model)
-    logging.info(teacher_model)
-    dataset_name = "datasets/github_code"
 
-    distiller = PhiMatDistiller(
-        teacher_model, tokenizer, dataset_name=dataset_name, mat_dim=args.distill_dim
-    )
+    distiller_kwargs = {"mat_dim": args.distill_dim}
     training_loop(
-        teacher_model,
-        tokenizer,
-        distiller,
-        dataset_name,
-        lr=args.lr,
-        num_epochs=args.num_epochs,
-        max_seq_len=args.max_seq_len,
-        batch_size=args.batch_size,
+        distiller_factory=PhiMatDistiller, args=args, distiller_kwargs=distiller_kwargs
     )
