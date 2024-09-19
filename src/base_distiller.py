@@ -1,3 +1,4 @@
+import math
 import torch
 from torch.amp import autocast, GradScaler
 import logging
@@ -85,7 +86,14 @@ class BaseDistiller:
             self.student_hook.remove()
 
     def train_layer(
-        self, train_encodings, train_seq_len, layer_id, loss_fn, epochs=1, lr=0.0004
+        self,
+        train_encodings,
+        train_seq_len,
+        layer_id,
+        loss_fn,
+        epochs=1,
+        lr=0.0004,
+        teacher_ppl=None,
     ):
         """
         Train a specific layer of the student model.
@@ -105,6 +113,7 @@ class BaseDistiller:
             filter(lambda p: p.requires_grad, self.student_model.parameters()), lr=lr
         )
 
+        last_student_ppl = None
         for epoch in range(epochs):
             losses = []
             for batch_idx, batch in enumerate(train_encodings):
@@ -112,11 +121,29 @@ class BaseDistiller:
                     logging.info(
                         f"layer {layer_id}: calculating intermediate perplexity."
                     )
-                    ppl = calculate_perplexity(
+                    student_ppl = calculate_perplexity(
                         self.student_model,
                         self.tokenizer,
                     )
-                    logging.info(f"Sudent model's ppl: {ppl:.3f}")
+                    logging.info(f"Sudent model's ppl: {student_ppl:.3f}")
+                    if (
+                        teacher_ppl is not None
+                        and math.abs(teacher_ppl - student_ppl) <= 0.02
+                    ):
+                        logging.info(
+                            f"stopping early because teacher ppl: ({teacher_ppl:.3f}) and student ppl: ({student_ppl:.3f}) are close."
+                        )
+                        # student is very close to the teacher so stop early
+                        break
+
+                    if last_student_ppl is None:
+                        last_student_ppl = student_ppl
+                    elif last_student_ppl < student_ppl:
+                        # stop early because the student is getting worse
+                        logging.info(
+                            f"stopping early because last student ppl ({last_student_ppl:3f}) was better than current student ppl ({student_ppl:.3f})"
+                        )
+                        break
 
                 try:
                     self.teacher_model.eval()

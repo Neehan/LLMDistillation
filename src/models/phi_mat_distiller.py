@@ -55,6 +55,13 @@ class PhiMatDistiller(MatDistiller):
 
 if __name__ == "__main__":
 
+    parser.add_argument(
+        "--model",
+        help="the model to distill",
+        default="microsoft/phi-1_5",
+        type=str,
+    )
+
     args = parser.parse_args()
     for arg, value in vars(args).items():
         logging.info(f"Argument: {arg}, Value: {value}")

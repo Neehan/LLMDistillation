@@ -40,11 +40,3 @@ parser.add_argument(
     default=1,
     type=int,
 )
-
-
-parser.add_argument(
-    "--model",
-    help="the model to distill",
-    default="microsoft/phi-1_5",
-    type=str,
-)
