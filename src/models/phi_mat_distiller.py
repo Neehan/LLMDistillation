@@ -65,19 +65,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     for arg, value in vars(args).items():
         logging.info(f"Argument: {arg}, Value: {value}")
-    teacher_model, tokenizer = load_model_and_tokenizer(args.model)
-    logging.info(teacher_model)
-    dataset_name = "datasets/github_code"
 
-    distiller = PhiMatDistiller(
-        teacher_model, tokenizer, dataset_name=dataset_name, mat_dim=args.distill_dim
-    )
-    # clear the reference to the teacher model
-    del teacher_model
+    distiller_kwargs = {"mat_dim": args.distill_dim}
     training_loop(
-        distiller,
-        lr=args.lr,
-        num_epochs=args.num_epochs,
-        max_seq_len=args.max_seq_len,
-        batch_size=args.batch_size,
+        distiller_factory=PhiMatDistiller, args=args, distiller_kwargs=distiller_kwargs
     )

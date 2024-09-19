@@ -4,22 +4,32 @@ import torch.nn as nn
 from src.constants import DATA_DIR, MODEL_PRECISION
 from src import utils
 import gc
+from src.base_distiller import BaseDistiller
+from src.utils import load_model_and_tokenizer
 
 
-def training_loop(
-    distiller,
-    lr,
-    num_epochs,
-    max_seq_len,
-    batch_size,
-):
+def training_loop(distiller_factory: BaseDistiller, args, distiller_kwargs):
     """
     progressively distill a student model by distilling one MLP
     layer at a time and then using the resulting model as teacher
     """
 
-    n_layers = distiller.num_layers
+    lr = args.lr
+    num_epochs = args.num_epochs
+    max_seq_len = args.max_seq_len
+    batch_size = args.batch_size
+
+    teacher_model, tokenizer = load_model_and_tokenizer(args.model)
+    logging.info(teacher_model)
+    dataset_name = "datasets/github_code"
+
     logging.info(f"params not in training precision: {MODEL_PRECISION} bits")
+
+    distiller = distiller_factory(
+        teacher_model, tokenizer, dataset_name=dataset_name, **distiller_kwargs
+    )
+
+    n_layers = distiller.num_layers
 
     for layer_id in range(n_layers - 2, 0, -1):
         # Load the dataset each time cause it's a generator under the hood
@@ -53,8 +63,11 @@ def training_loop(
         #     DATA_DIR + "llm_cache/model" + f"_matryoshka_student_{layer_id}.pth",
         # )
 
-        # make current student the new teacher
-        distiller.teacher_model = student_model
+        # make current student the new teacher and create a new distiller
+        teacher_model = student_model
+        distiller = distiller_factory(
+            teacher_model, tokenizer, dataset_name=dataset_name, **distiller_kwargs
+        )
 
         gc.collect()  # Encourage garbage collector to release unreferenced memory
         if torch.cuda.is_available():
