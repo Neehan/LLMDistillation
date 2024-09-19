@@ -155,15 +155,15 @@ class BaseDistiller:
                     attention_mask = batch["attention_mask"].to(self.device)
                     optimizer.zero_grad()
 
-                #             if torch.cuda.is_available():
-                #                 with autocast("cuda"):
-                #                     # hook saves the intermediate outputs to self.student_mlp_outputs
-                #                     loss = self.compute_loss(
-                #                         layer_id, input_ids, attention_mask, loss_fn=loss_fn
-                #                     )
-                #                 self.scaler.scale(loss).backward()
-                #                 self.scaler.step(optimizer)
-                #                 self.scaler.update()
+                    if torch.cuda.is_available():
+                        with autocast("cuda"):
+                            # hook saves the intermediate outputs to self.student_mlp_outputs
+                            loss = self.compute_loss(
+                                layer_id, input_ids, attention_mask, loss_fn=loss_fn
+                            )
+                        self.scaler.scale(loss).backward()
+                        self.scaler.step(optimizer)
+                        self.scaler.update()
                 #             else:
                 #                 loss = self.compute_loss(
                 #                     layer_id, input_ids, attention_mask, loss_fn=loss_fn
