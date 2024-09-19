@@ -86,11 +86,10 @@ def training_loop(distiller_factory: BaseDistiller, args, distiller_kwargs):
         # make current student the new teacher and create a new distiller
         teacher_model = student_model
 
-        # Save the model state dictionary
-        # torch.save(
-        #     student_model,
-        #     DATA_DIR + "llm_cache/model" + f"_matryoshka_student_{layer_id}.pth",
-        # )
+        torch.save(
+            student_model,
+            DATA_DIR + "llm_cache/model" + f"_matryoshka_student.pth",
+        )
 
     # compute the final student model ppl
     ppl = utils.calculate_perplexity(
