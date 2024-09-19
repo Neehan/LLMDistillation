@@ -1,8 +1,7 @@
 import torch
 from torch.amp import autocast, GradScaler
-from tqdm import tqdm
 import logging
-from src.constants import MODEL_PRECISION, TQDM_OUTPUT, MIN_INTERVAL_SEC, DATA_DIR
+from src.constants import MODEL_PRECISION
 from src.utils import calculate_perplexity
 import logging
 
@@ -108,10 +107,11 @@ class BaseDistiller:
 
         for epoch in range(epochs):
             losses = []
-            for i, batch in enumerate(train_encodings):
-
-                if i == 500:
-                    logging.info(f"layer {i}: calculating intermediate perplexity.")
+            for batch_idx, batch in enumerate(train_encodings):
+                if batch_idx == 75:
+                    logging.info(
+                        f"layer {layer_id}: calculating intermediate perplexity."
+                    )
                     ppl = calculate_perplexity(
                         self.student_model,
                         self.tokenizer,
