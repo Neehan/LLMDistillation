@@ -109,13 +109,13 @@ class BaseDistiller:
         self.student_model = self.student_model.to(self.device).to(torch.float32)
         # self.register_hooks(layer_id)
 
-        # # Get only the MLP layer parameters for the specified layer_id
-        # mlp_parameters = self.get_model_mlp(self.student_model, layer_id).parameters()
+        # Get only the MLP layer parameters for the specified layer_id
+        mlp_parameters = self.get_model_mlp(self.student_model, layer_id).parameters()
 
-        # # Set up the optimizer to only train the MLP layer's parameters
-        # optimizer = torch.optim.Adam(mlp_parameters, lr=lr)
+        # Set up the optimizer to only train the MLP layer's parameters
+        optimizer = torch.optim.Adam(mlp_parameters, lr=lr)
 
-        # last_student_ppl = None
+        last_student_ppl = None
         # for epoch in range(epochs):
         #     losses = []
         #     for batch_idx, batch in enumerate(train_encodings):
@@ -183,11 +183,11 @@ class BaseDistiller:
         #     logging.info(f"Average Loss: {avg_loss}")
 
         # # self.remove_hooks()  # training complete remove the hooks
-        # # turn on gradients following the teacher model
-        # for teacher_param, student_param in zip(
-        #     self.teacher_model.parameters(), self.student_model.parameters()
-        # ):
-        #     student_param.requires_grad = teacher_param.requires_grad
+        # turn on gradients following the teacher model
+        for teacher_param, student_param in zip(
+            self.teacher_model.parameters(), self.student_model.parameters()
+        ):
+            student_param.requires_grad = teacher_param.requires_grad
 
-        # self.student_model = self.student_model.to(self.device).to(MODEL_PRECISION)
+        self.student_model = self.student_model.to(self.device).to(MODEL_PRECISION)
         return self.student_model

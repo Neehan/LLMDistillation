@@ -92,8 +92,8 @@ def training_loop(distiller_factory: BaseDistiller, args, distiller_kwargs):
 
     # compute the final student model ppl
     ppl = utils.calculate_perplexity(
-        distiller.teacher_model,
-        distiller.tokenizer,
+        teacher_model,
+        tokenizer,
     )
     logging.info(f"Teacher model {layer_id} ppl: {ppl:.3f}")
 
