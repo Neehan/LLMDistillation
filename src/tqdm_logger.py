@@ -11,14 +11,10 @@ class TqdmToLogger(object):
 
     def write(self, buf):
         self.buf += buf
-        while "\n" in self.buf or "\r" in self.buf:
-            if "\n" in self.buf:
-                line, self.buf = self.buf.split("\n", 1)
-            else:
-                line, self.buf = self.buf.split("\r", 1)
-            self.logger.log(self.level, line.strip("\r\n\t "))
+        if "\n" in self.buf:
+            self.flush()
+            self.buf = ""
 
     def flush(self):
         if self.buf:
             self.logger.log(self.level, self.buf.strip("\r\n\t "))
-            self.buf = ""
