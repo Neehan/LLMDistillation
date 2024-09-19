@@ -116,69 +116,69 @@ class BaseDistiller:
         optimizer = torch.optim.Adam(mlp_parameters, lr=lr)
 
         last_student_ppl = None
-        # for epoch in range(epochs):
-        #     losses = []
-        #     for batch_idx, batch in enumerate(train_encodings):
-        #         if batch_idx % 100 == 24:
-        #             logging.info(
-        #                 f"layer {layer_id}: calculating intermediate perplexity."
-        #             )
-        #             student_ppl = calculate_perplexity(
-        #                 self.student_model,
-        #                 self.tokenizer,
-        #             )
-        #             logging.info(f"Sudent model's ppl: {student_ppl:.3f}")
-        #             # if (
-        #             #     teacher_ppl is not None
-        #             #     and math.abs(teacher_ppl - student_ppl) <= 0.02
-        #             # ):
-        #             #     logging.info(
-        #             #         f"stopping early because teacher ppl: ({teacher_ppl:.3f}) and student ppl: ({student_ppl:.3f}) are close."
-        #             #     )
-        #             #     # student is very close to the teacher so stop early
-        #             #     break
+        for epoch in range(epochs):
+            losses = []
+            for batch_idx, batch in enumerate(train_encodings):
+                if batch_idx % 100 == 24:
+                    logging.info(
+                        f"layer {layer_id}: calculating intermediate perplexity."
+                    )
+                    student_ppl = calculate_perplexity(
+                        self.student_model,
+                        self.tokenizer,
+                    )
+                    logging.info(f"Sudent model's ppl: {student_ppl:.3f}")
+                    # if (
+                    #     teacher_ppl is not None
+                    #     and math.abs(teacher_ppl - student_ppl) <= 0.02
+                    # ):
+                    #     logging.info(
+                    #         f"stopping early because teacher ppl: ({teacher_ppl:.3f}) and student ppl: ({student_ppl:.3f}) are close."
+                    #     )
+                    #     # student is very close to the teacher so stop early
+                    #     break
 
-        #             if last_student_ppl is None:
-        #                 last_student_ppl = student_ppl
-        #             elif last_student_ppl < student_ppl:
-        #                 # stop early because the student is getting worse
-        #                 logging.info(
-        #                     f"stopping early because last student ppl ({last_student_ppl:3f}) was better than current student ppl ({student_ppl:.3f})"
-        #                 )
-        #                 break
+                    if last_student_ppl is None:
+                        last_student_ppl = student_ppl
+                    elif last_student_ppl < student_ppl:
+                        # stop early because the student is getting worse
+                        logging.info(
+                            f"stopping early because last student ppl ({last_student_ppl:3f}) was better than current student ppl ({student_ppl:.3f})"
+                        )
+                        break
 
-        #         try:
-        #             self.teacher_model.eval()
-        #             self.student_model.train()
+                try:
+                    self.teacher_model.eval()
+                    self.student_model.train()
 
-        #             input_ids = batch["input_ids"].to(self.device)
-        #             attention_mask = batch["attention_mask"].to(self.device)
-        #             optimizer.zero_grad()
+                    input_ids = batch["input_ids"].to(self.device)
+                    attention_mask = batch["attention_mask"].to(self.device)
+                    optimizer.zero_grad()
 
-        #             if torch.cuda.is_available():
-        #                 with autocast("cuda"):
-        #                     # hook saves the intermediate outputs to self.student_mlp_outputs
-        #                     loss = self.compute_loss(
-        #                         layer_id, input_ids, attention_mask, loss_fn=loss_fn
-        #                     )
-        #                 self.scaler.scale(loss).backward()
-        #                 self.scaler.step(optimizer)
-        #                 self.scaler.update()
-        #             else:
-        #                 loss = self.compute_loss(
-        #                     layer_id, input_ids, attention_mask, loss_fn=loss_fn
-        #                 )
-        #                 loss.backward()
-        #                 optimizer.step()
+                #             if torch.cuda.is_available():
+                #                 with autocast("cuda"):
+                #                     # hook saves the intermediate outputs to self.student_mlp_outputs
+                #                     loss = self.compute_loss(
+                #                         layer_id, input_ids, attention_mask, loss_fn=loss_fn
+                #                     )
+                #                 self.scaler.scale(loss).backward()
+                #                 self.scaler.step(optimizer)
+                #                 self.scaler.update()
+                #             else:
+                #                 loss = self.compute_loss(
+                #                     layer_id, input_ids, attention_mask, loss_fn=loss_fn
+                #                 )
+                #                 loss.backward()
+                #                 optimizer.step()
 
-        #             losses.append(loss.item())
+                #             losses.append(loss.item())
 
-        #         except Exception as e:
-        #             logging.error("GOT AN EXCEPTION")
-        #             logging.error(e)
-        #             # remove the hooks else memory leak
-        #             # self.remove_hooks()
-        #             raise e
+                except Exception as e:
+                    logging.error("GOT AN EXCEPTION")
+                    logging.error(e)
+                    # remove the hooks else memory leak
+                    # self.remove_hooks()
+                    raise e
         #     avg_loss = sum(losses) / len(losses)
         #     logging.info(f"Average Loss: {avg_loss}")
 
