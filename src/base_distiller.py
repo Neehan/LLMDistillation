@@ -91,8 +91,8 @@ class BaseDistiller:
         train_seq_len,
         layer_id,
         loss_fn,
-        epochs=1,
-        lr=0.0004,
+        epochs,
+        lr,
         teacher_ppl=None,
     ):
         """
@@ -107,11 +107,13 @@ class BaseDistiller:
         """
         self.prepare_student_model(layer_id)
         self.student_model = self.student_model.to(self.device).to(torch.float32)
-        self.register_hooks(layer_id)
+        # self.register_hooks(layer_id)
 
-        optimizer = torch.optim.Adam(
-            filter(lambda p: p.requires_grad, self.student_model.parameters()), lr=lr
-        )
+        # Get only the MLP layer parameters for the specified layer_id
+        mlp_parameters = self.get_model_mlp(self.student_model, layer_id).parameters()
+
+        # Set up the optimizer to only train the MLP layer's parameters
+        optimizer = torch.optim.Adam(mlp_parameters, lr=lr)
 
         last_student_ppl = None
         for epoch in range(epochs):
@@ -175,12 +177,18 @@ class BaseDistiller:
                     logging.error("GOT AN EXCEPTION")
                     logging.error(e)
                     # remove the hooks else memory leak
-                    self.remove_hooks()
+                    # self.remove_hooks()
                     raise e
             avg_loss = sum(losses) / len(losses)
             logging.info(f"Average Loss: {avg_loss}")
 
-        self.remove_hooks()  # training complete remove the hooks
+        # self.remove_hooks()  # training complete remove the hooks
+
+        print(f"{layer_id} teacher model:")
+        print(self.teacher_model)
+
+        print(f"{layer_id} student model:")
+        print(self.student_model)
 
         # turn on gradients following the teacher model
         for teacher_param, student_param in zip(

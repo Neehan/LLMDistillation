@@ -1,7 +1,7 @@
 import logging
 import torch
 import torch.nn as nn
-from src.constants import DATA_DIR, TEST_ENV
+from src.constants import DATA_DIR, MODEL_PRECISION
 from src import utils
 import gc
 
@@ -19,6 +19,7 @@ def training_loop(
     """
 
     n_layers = distiller.num_layers
+    logging.info(f"params not in training precision: {MODEL_PRECISION} bits")
 
     for layer_id in range(n_layers - 2, 0, -1):
         # Load the dataset each time cause it's a generator under the hood

@@ -102,6 +102,7 @@ def load_encodings_from_files(save_path, batch_size):
                 }
                 batch_input_ids = []
                 batch_attention_mask = []
+                break
     if batch_input_ids:
         yield {
             "input_ids": torch.cat(batch_input_ids, dim=0),
@@ -224,6 +225,8 @@ def calculate_perplexity(model, tokenizer, stride=512, max_length=2048):
         # Ensure DATA_DIR is defined or replace it with the desired cache directory
         cache_dir=DATA_DIR + "datasets/",
     )
+
+    return -1.0
 
     # Collect the text data
     texts = []
