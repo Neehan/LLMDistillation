@@ -182,9 +182,11 @@ class BaseDistiller:
 
         self.remove_hooks()  # training complete remove the hooks
 
-        # Enable gradients for all parameters in the student model
-        for name, param in self.student_model.named_parameters():
-            param.requires_grad = True  # Turn on gradients
+        # turn on gradients following the teacher model
+        for teacher_param, student_param in zip(
+            self.teacher_model.parameters(), self.student_model.parameters()
+        ):
+            student_param.requires_grad = teacher_param.requires_grad
 
         self.student_model = self.student_model.to(self.device).to(MODEL_PRECISION)
         return self.student_model

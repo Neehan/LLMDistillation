@@ -23,7 +23,7 @@ def training_loop(
 
     n_layers = distiller.num_layers
 
-    for layer_id in range(n_layers - 1, -1, -1):
+    for layer_id in range(n_layers - 2, 0, -1):
         # Load the dataset each time cause it's a generator under the hood
         train_encodings = utils.load_coding_dataset(
             tokenizer=tokenizer, batch_size=batch_size, max_length=max_seq_len
@@ -61,7 +61,7 @@ def training_loop(
         if torch.cuda.is_available():
             torch.cuda.empty_cache()  # Clear CUDA cache
         # make current student the new teacher
-        teacher_model = student_model
+        distiller.teacher_model = student_model
 
     # compute the final student model ppl
     ppl = utils.calculate_perplexity(
