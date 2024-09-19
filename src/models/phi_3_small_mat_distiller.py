@@ -72,7 +72,6 @@ class PhiMatDistiller(MatDistiller):
         return model.model.layers[layer_id].mlp
 
     def prepare_student_model(self, layer_id):
-        self.student_model = copy.deepcopy(self.teacher_model)
         self.student_model.model.layers[layer_id].mlp = Phi3SmallMatMLP(
             self.student_model.model.layers[layer_id].mlp,
             self.hidden_dim_list,

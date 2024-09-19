@@ -5,15 +5,20 @@ import logging
 from src.constants import MODEL_PRECISION
 from src.utils import calculate_perplexity
 import logging
+import copy
 
 
 class BaseDistiller:
-    def __init__(self, teacher_model, tokenizer, dataset_name):
+    def __init__(self, tokenizer, teacher_model, student_model, dataset_name):
         self.teacher_model = teacher_model.to(MODEL_PRECISION)
         self.tokenizer = tokenizer
         self.dataset_name = dataset_name
         self.device = teacher_model.device
-        self.student_model = None
+        self.student_model = (
+            student_model
+            if student_model is not None
+            else copy.deepcopy(self.teacher_model)
+        )
         self.teacher_hook = None
         self.student_hook = None
         self.num_layers = len(self.get_model_layers(teacher_model))
@@ -105,6 +110,11 @@ class BaseDistiller:
         - lr (float): The learning rate for optimization (default is 0.0004).
         """
         self.prepare_student_model(layer_id)
+
+        assert (
+            self.student_model is not None
+        ), "student model must be set by prepare_student!"
+
         self.student_model = self.student_model.to(self.device)
         self.student_model = self.student_model.to(torch.float32)
         self.register_hooks(layer_id)

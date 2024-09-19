@@ -9,7 +9,10 @@ import torch.jit
 
 
 class PhiMatMLP(MatryoshkaMLP):
-    @torch.jit.script
+    def __init__(self, original_mlp, hidden_dim_list, layer_id):
+        super(PhiMatMLP, self).__init__(original_mlp, hidden_dim_list, layer_id)
+
+    # @torch.jit.script
     def _mat_forward(self, x):
         hidden_dim = (
             self.hidden_dim_list[self.layer_id]
@@ -42,7 +45,6 @@ class PhiMatDistiller(MatDistiller):
         return model.model.layers[layer_id].mlp
 
     def prepare_student_model(self, layer_id):
-        self.student_model = copy.deepcopy(self.teacher_model)
         self.student_model.model.layers[layer_id].mlp = PhiMatMLP(
             self.student_model.model.layers[layer_id].mlp,
             self.hidden_dim_list,

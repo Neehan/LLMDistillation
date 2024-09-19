@@ -28,8 +28,12 @@ class MatryoshkaMLP(nn.Module):
 
 
 class MatDistiller(BaseDistiller):
-    def __init__(self, teacher_model, tokenizer, dataset_name, mat_dim: int):
-        super(MatDistiller, self).__init__(teacher_model, tokenizer, dataset_name)
+    def __init__(
+        self, tokenizer, teacher_model, student_model, dataset_name, mat_dim: int
+    ):
+        super(MatDistiller, self).__init__(
+            tokenizer, teacher_model, student_model, dataset_name
+        )
         self.mat_dim = mat_dim
         # matriyoshka always uses small matrix unless specified
         self.hidden_dim_list = [mat_dim] * self.num_layers
