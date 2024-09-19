@@ -106,7 +106,7 @@ class BaseDistiller:
         """
         self.prepare_student_model(layer_id)
         self.student_model = self.student_model.to(self.device)
-        # self.register_hooks(layer_id)
+        self.register_hooks(layer_id)
 
         # Get only the MLP layer parameters for the specified layer_id
         mlp_parameters = self.get_model_mlp(self.student_model, layer_id).parameters()
@@ -129,15 +129,15 @@ class BaseDistiller:
                         self.tokenizer,
                     )
                     logging.info(f"Sudent model's ppl: {student_ppl:.3f}")
-                    # if (
-                    #     teacher_ppl is not None
-                    #     and math.abs(teacher_ppl - student_ppl) <= 0.02
-                    # ):
-                    #     logging.info(
-                    #         f"stopping early because teacher ppl: ({teacher_ppl:.3f}) and student ppl: ({student_ppl:.3f}) are close."
-                    #     )
-                    #     # student is very close to the teacher so stop early
-                    #     break
+                    if (
+                        teacher_ppl is not None
+                        and math.abs(teacher_ppl - student_ppl) <= 0.01
+                    ):
+                        logging.info(
+                            f"stopping early because teacher ppl: ({teacher_ppl:.3f}) and student ppl: ({student_ppl:.3f}) are close."
+                        )
+                        # student is very close to the teacher so stop early
+                        break
 
                     if last_student_ppl is None:
                         last_student_ppl = student_ppl
@@ -177,12 +177,12 @@ class BaseDistiller:
                     logging.error("GOT AN EXCEPTION")
                     logging.error(e)
                     # remove the hooks else memory leak
-                    # self.remove_hooks()
+                    self.remove_hooks()
                     raise e
-        #     avg_loss = sum(losses) / len(losses)
-        #     logging.info(f"Average Loss: {avg_loss}")
+            avg_loss = sum(losses) / len(losses)
+            logging.info(f"Average Loss: {avg_loss}")
 
-        # # self.remove_hooks()  # training complete remove the hooks
+        self.remove_hooks()  # training complete remove the hooks
         # turn on gradients following the teacher model
         for teacher_param, student_param in zip(
             self.teacher_model.parameters(), self.student_model.parameters()
