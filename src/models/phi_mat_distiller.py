@@ -72,11 +72,10 @@ if __name__ == "__main__":
     distiller = PhiMatDistiller(
         teacher_model, tokenizer, dataset_name=dataset_name, mat_dim=args.distill_dim
     )
+    # clear the reference to the teacher model
+    del teacher_model
     training_loop(
-        teacher_model,
-        tokenizer,
         distiller,
-        dataset_name,
         lr=args.lr,
         num_epochs=args.num_epochs,
         max_seq_len=args.max_seq_len,

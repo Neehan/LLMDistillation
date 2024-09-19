@@ -7,10 +7,7 @@ import gc
 
 
 def training_loop(
-    teacher_model,
-    tokenizer,
     distiller,
-    dataset_name,
     lr,
     num_epochs,
     max_seq_len,
@@ -26,15 +23,15 @@ def training_loop(
     for layer_id in range(n_layers - 2, 0, -1):
         # Load the dataset each time cause it's a generator under the hood
         train_encodings = utils.load_coding_dataset(
-            tokenizer=tokenizer, batch_size=batch_size, max_length=max_seq_len
+            tokenizer=distiller.tokenizer, batch_size=batch_size, max_length=max_seq_len
         )
 
         logging.info("loaded the dataset")
 
         # calculate the ppl of the teacher model first
         ppl = utils.calculate_perplexity(
-            teacher_model,
-            tokenizer,
+            distiller.teacher_model,
+            distiller.tokenizer,
         )
         logging.info(f"Teacher model {layer_id} ppl: {ppl:.3f}")
 
@@ -55,17 +52,21 @@ def training_loop(
         #     DATA_DIR + "llm_cache/model" + f"_matryoshka_student_{layer_id}.pth",
         # )
 
-        # delete current teacher which we don't need anymore
-        del teacher_model
-        gc.collect()  # Encourage garbage collector to release unreferenced memory
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()  # Clear CUDA cache
         # make current student the new teacher
         distiller.teacher_model = student_model
 
+        gc.collect()  # Encourage garbage collector to release unreferenced memory
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()  # Clear CUDA cache
+
     # compute the final student model ppl
     ppl = utils.calculate_perplexity(
-        teacher_model,
-        tokenizer,
+        distiller.teacher_model,
+        distiller.tokenizer,
     )
     logging.info(f"Teacher model {layer_id} ppl: {ppl:.3f}")
+
+    torch.save(
+        student_model,
+        DATA_DIR + "llm_cache/model" + f"_matryoshka_student.pth",
+    )

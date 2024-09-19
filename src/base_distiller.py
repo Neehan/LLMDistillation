@@ -125,7 +125,7 @@ class BaseDistiller:
                         self.student_model,
                         self.tokenizer,
                     )
-                    # logging.info(f"Sudent model's ppl: {student_ppl:.3f}")
+                    logging.info(f"Sudent model's ppl: {student_ppl:.3f}")
                     # if (
                     #     teacher_ppl is not None
                     #     and math.abs(teacher_ppl - student_ppl) <= 0.02
