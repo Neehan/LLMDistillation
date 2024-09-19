@@ -8,6 +8,13 @@ from src.base_distiller import BaseDistiller
 from src.utils import load_model_and_tokenizer
 
 
+def get_gpu_memory_usage():
+    allocated = torch.cuda.memory_allocated() / (1024**3)  # Convert bytes to GB
+    reserved = torch.cuda.memory_reserved() / (1024**3)
+    print(f"Memory Allocated: {allocated:.2f} GB")
+    print(f"Memory Reserved: {reserved:.2f} GB")
+
+
 def training_loop(distiller_factory: BaseDistiller, args, distiller_kwargs):
     """
     progressively distill a student model by distilling one MLP
@@ -22,6 +29,8 @@ def training_loop(distiller_factory: BaseDistiller, args, distiller_kwargs):
 
     logging.info(f"params not in training precision: {MODEL_PRECISION} bits")
 
+    # Before loading the model
+    get_gpu_memory_usage()
     teacher_model, tokenizer = load_model_and_tokenizer(args.model)
     logging.info(teacher_model)
     dataset_name = "datasets/github_code"
@@ -30,6 +39,9 @@ def training_loop(distiller_factory: BaseDistiller, args, distiller_kwargs):
         distiller = distiller_factory(
             teacher_model, tokenizer, dataset_name=dataset_name, **distiller_kwargs
         )
+
+        # Before loading the model
+        get_gpu_memory_usage()
 
         # Load the dataset each time cause it's a generator under the hood
         train_encodings = utils.load_coding_dataset(
@@ -56,8 +68,19 @@ def training_loop(distiller_factory: BaseDistiller, args, distiller_kwargs):
             lr=lr,
         )
 
+        # Before loading the model
+        get_gpu_memory_usage()
+
         del teacher_model
         del distiller
+
+        gc.collect()  # Encourage garbage collector to release unreferenced memory
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()  # Clear CUDA cache
+
+        # Before loading the model
+        get_gpu_memory_usage()
+
         # make current student the new teacher and create a new distiller
         teacher_model = student_model
 
@@ -66,10 +89,6 @@ def training_loop(distiller_factory: BaseDistiller, args, distiller_kwargs):
         #     student_model,
         #     DATA_DIR + "llm_cache/model" + f"_matryoshka_student_{layer_id}.pth",
         # )
-
-        gc.collect()  # Encourage garbage collector to release unreferenced memory
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()  # Clear CUDA cache
 
     # compute the final student model ppl
     ppl = utils.calculate_perplexity(
