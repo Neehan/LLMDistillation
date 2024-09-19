@@ -41,6 +41,7 @@ def training_loop(distiller_factory: BaseDistiller, args, distiller_kwargs):
         )
 
         # Before loading the model
+        logging.info("\nAFTER LOADING DISTILLER")
         get_gpu_memory_usage()
 
         # Load the dataset each time cause it's a generator under the hood
@@ -68,6 +69,7 @@ def training_loop(distiller_factory: BaseDistiller, args, distiller_kwargs):
             lr=lr,
         )
 
+        logging.info("\nAFTER TRAINING LOOP")
         # Before loading the model
         get_gpu_memory_usage()
 
@@ -78,6 +80,7 @@ def training_loop(distiller_factory: BaseDistiller, args, distiller_kwargs):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()  # Clear CUDA cache
 
+        logging.info("\nAFTER CALLING GC")
         # Before loading the model
         get_gpu_memory_usage()
 
