@@ -111,7 +111,7 @@ class BaseDistiller:
         # Get only the MLP layer parameters for the specified layer_id
         mlp_parameters = self.get_model_mlp(self.student_model, layer_id).parameters()
         # Set up the optimizer to only train the MLP layer's parameters
-        optimizer = torch.optim.Adam(mlp_parameters, lr=lr)
+        optimizer = torch.optim.AdamW(mlp_parameters, lr=lr)
 
         device_str = "cuda" if torch.cuda.is_available() else "cpu"
         scaler = GradScaler(device_str)

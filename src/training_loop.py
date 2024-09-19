@@ -28,9 +28,6 @@ def training_loop(distiller_factory: BaseDistiller, args, distiller_kwargs):
     n_layers = args.num_layers
 
     logging.info(f"params not in training precision: {MODEL_PRECISION} bits")
-
-    # Before loading the model
-    get_gpu_memory_usage()
     teacher_model, tokenizer = load_model_and_tokenizer(args.model)
     logging.info(teacher_model)
     dataset_name = "datasets/github_code"
@@ -40,9 +37,9 @@ def training_loop(distiller_factory: BaseDistiller, args, distiller_kwargs):
             teacher_model, tokenizer, dataset_name=dataset_name, **distiller_kwargs
         )
 
-        # Before loading the model
-        logging.info("\nAFTER LOADING DISTILLER")
-        get_gpu_memory_usage()
+        if TEST_ENV:
+            logging.info("\nAFTER LOADING DISTILLER")
+            get_gpu_memory_usage()
 
         # Load the dataset each time cause it's a generator under the hood
         train_encodings = utils.load_coding_dataset(
@@ -70,9 +67,10 @@ def training_loop(distiller_factory: BaseDistiller, args, distiller_kwargs):
             lr=lr,
         )
 
-        logging.info("\nAFTER TRAINING LOOP")
-        # Before loading the model
-        get_gpu_memory_usage()
+        if TEST_ENV:
+            logging.info("\nAFTER TRAINING LOOP")
+            # Before loading the model
+            get_gpu_memory_usage()
 
         del teacher_model
         del distiller
@@ -81,9 +79,9 @@ def training_loop(distiller_factory: BaseDistiller, args, distiller_kwargs):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()  # Clear CUDA cache
 
-        logging.info("\nAFTER CALLING GC")
-        # Before loading the model
-        get_gpu_memory_usage()
+        if TEST_ENV:
+            logging.info("\nAFTER CALLING GC")
+            get_gpu_memory_usage()
 
         # make current student the new teacher and create a new distiller
         teacher_model = student_model
