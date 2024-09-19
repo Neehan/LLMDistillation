@@ -125,16 +125,16 @@ class BaseDistiller:
                         self.student_model,
                         self.tokenizer,
                     )
-                    logging.info(f"Sudent model's ppl: {student_ppl:.3f}")
-                    if (
-                        teacher_ppl is not None
-                        and math.abs(teacher_ppl - student_ppl) <= 0.02
-                    ):
-                        logging.info(
-                            f"stopping early because teacher ppl: ({teacher_ppl:.3f}) and student ppl: ({student_ppl:.3f}) are close."
-                        )
-                        # student is very close to the teacher so stop early
-                        break
+                    # logging.info(f"Sudent model's ppl: {student_ppl:.3f}")
+                    # if (
+                    #     teacher_ppl is not None
+                    #     and math.abs(teacher_ppl - student_ppl) <= 0.02
+                    # ):
+                    #     logging.info(
+                    #         f"stopping early because teacher ppl: ({teacher_ppl:.3f}) and student ppl: ({student_ppl:.3f}) are close."
+                    #     )
+                    #     # student is very close to the teacher so stop early
+                    #     break
 
                     if last_student_ppl is None:
                         last_student_ppl = student_ppl
