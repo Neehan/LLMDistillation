@@ -33,6 +33,12 @@ def training_loop(distiller_factory: BaseDistiller, args, distiller_kwargs):
     logging.info(teacher_model)
     dataset_name = "datasets/github_code"
 
+    ppl = utils.calculate_perplexity(
+        distiller.teacher_model,
+        distiller.tokenizer,
+    )
+    logging.info(f"Teacher model {n_layers - 2}'s ppl: {ppl:.3f}")
+
     for layer_id in range(n_layers - 2, 0, -1):
         distiller = distiller_factory(
             tokenizer,
@@ -52,14 +58,6 @@ def training_loop(distiller_factory: BaseDistiller, args, distiller_kwargs):
         )
 
         logging.info("loaded the dataset")
-
-        # calculate the ppl of the teacher model first
-
-        ppl = utils.calculate_perplexity(
-            distiller.teacher_model,
-            distiller.tokenizer,
-        )
-        logging.info(f"Teacher model {layer_id} ppl: {ppl:.3f}")
 
         logging.info(f"Training student model {layer_id}.")
 
@@ -95,13 +93,6 @@ def training_loop(distiller_factory: BaseDistiller, args, distiller_kwargs):
             student_model,
             DATA_DIR + "llm_cache/model" + f"_matryoshka_student.pth",
         )
-
-    # compute the final student model ppl
-    ppl = utils.calculate_perplexity(
-        teacher_model,
-        tokenizer,
-    )
-    logging.info(f"Teacher model {layer_id} ppl: {ppl:.3f}")
 
     torch.save(
         student_model,

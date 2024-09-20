@@ -140,7 +140,7 @@ class BaseDistiller:
                         self.student_model,
                         self.tokenizer,
                     )
-                    logging.info(f"Sudent model's ppl: {student_ppl:.3f}")
+                    logging.info(f"Sudent model {layer_id}'s ppl: {student_ppl:.3f}")
                     if (
                         teacher_ppl is not None
                         and math.abs(teacher_ppl - student_ppl) <= 0.01
@@ -202,4 +202,9 @@ class BaseDistiller:
             student_param.requires_grad = teacher_param.requires_grad
 
         self.student_model = self.student_model.to(self.device).to(MODEL_PRECISION)
+        student_ppl = calculate_perplexity(
+            self.student_model,
+            self.tokenizer,
+        )
+        logging.info(f"Sudent model {layer_id}'s ppl: {student_ppl:.3f}")
         return self.student_model
