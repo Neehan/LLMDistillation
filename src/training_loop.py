@@ -34,8 +34,8 @@ def training_loop(distiller_factory: BaseDistiller, args, distiller_kwargs):
     dataset_name = "datasets/github_code"
 
     ppl = utils.calculate_perplexity(
-        distiller.teacher_model,
-        distiller.tokenizer,
+        teacher_model,
+        tokenizer,
     )
     logging.info(f"Teacher model {n_layers - 2}'s ppl: {ppl:.3f}")
 
