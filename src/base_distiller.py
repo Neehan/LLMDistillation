@@ -146,7 +146,7 @@ class BaseDistiller:
                         and math.abs(teacher_ppl - student_ppl) <= 0.01
                     ):
                         logging.info(
-                            f"stopping early because teacher ppl: ({teacher_ppl:.3f}) and student ppl: ({student_ppl:.3f}) are close."
+                            f"stopping early because teacher ppl: ({teacher_ppl}) and student ppl: ({student_ppl}) are close."
                         )
                         # student is very close to the teacher so stop early
                         break
@@ -154,7 +154,7 @@ class BaseDistiller:
                     if last_student_ppl is not None and last_student_ppl < student_ppl:
                         # stop early because the student is getting worse
                         logging.info(
-                            f"stopping early because last student ppl ({last_student_ppl:3f}) was better than current student ppl ({student_ppl:.3f})"
+                            f"stopping early because last student ppl ({last_student_ppl}) was better than current student ppl ({student_ppl})"
                         )
                         break
                     else:
