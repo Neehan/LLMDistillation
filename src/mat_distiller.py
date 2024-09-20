@@ -63,8 +63,8 @@ class MatDistiller(BaseDistiller):
         ).logits
         small_student_mlp_output = self.student_mlp_outputs[layer_id]
 
-        # loss1 = loss_fn(large_student_mlp_output, teacher_mlp_output)
-        # loss2 = loss_fn(small_student_mlp_output, teacher_mlp_output)
+        loss1 = loss_fn(large_student_mlp_output, teacher_mlp_output)
+        loss2 = loss_fn(small_student_mlp_output, teacher_mlp_output)
 
         # keep mat dim to be small so that when ppl is calculated, it is
         # calculated from the small model
@@ -81,5 +81,5 @@ class MatDistiller(BaseDistiller):
             F.softmax(teacher_model_logits, dim=-1),
         )
 
-        # return loss1 + loss2  # + (loss3 + loss4) * 0.01
-        return loss3 + loss4
+        # loss1-4:  2.685352455955581e-06 0.2900651693344116 0.010453160852193832 40.25238037109375
+        return loss1 * 10 + loss2 * 10 + loss3 * 10 + loss4 * 0.1
