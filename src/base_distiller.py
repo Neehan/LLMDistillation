@@ -65,7 +65,7 @@ class BaseDistiller:
                 teacher_logits_batch = teacher_logits[batch_idx]
                 optimizer.zero_grad()
 
-                with autocast(device_type=DEVICE, dtype=MODEL_PRECISION):
+                with autocast(device_type=str(DEVICE), dtype=MODEL_PRECISION):
                     loss = self.compute_loss(
                         layer_id, input_ids, attention_mask, teacher_logits_batch
                     )
