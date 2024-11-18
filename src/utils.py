@@ -257,9 +257,9 @@ def calculate_perplexity(
         torch.save(encodings, encodings_ppl_file)
 
     if not full_dataset:
-        input_ids = encodings["input_ids"][:, : len(encodings["input_ids"]) // 20].to(
-            model.device
-        )
+        input_ids = encodings["input_ids"][
+            :, : encodings["input_ids"].shape[1] // 20
+        ].to(model.device)
     else:
         input_ids = encodings["input_ids"].to(model.device)
 
