@@ -1,5 +1,4 @@
 import torch
-import matplotlib.pyplot as plt
 import os
 import logging
 from src.tqdm_logger import TqdmToLogger
@@ -10,7 +9,6 @@ import os
 # Automatically finds and loads the .env file
 load_dotenv()
 
-plt.style.use("ggplot")
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 torch.use_deterministic_algorithms(True)
 
