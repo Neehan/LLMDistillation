@@ -30,7 +30,7 @@ def get_teacher_logits(teacher_model, tokenizer, max_seq_len, batch_size):
             attention_mask = batch["attention_mask"].to(teacher_model.device)
 
             outputs = teacher_model(input_ids, attention_mask)
-            logits = outputs.logits
+            logits = outputs.logits.cpu()
             all_logits.append(logits)
 
     return all_logits
