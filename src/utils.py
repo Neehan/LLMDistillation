@@ -28,7 +28,8 @@ def load_model_and_tokenizer(path):
         trust_remote_code=True,
         cache_dir=DATA_DIR + "llm_cache/",
         attn_implementation="flash_attention_2",
-    ).to(DEVICE)
+        device_map="auto",
+    )
     logging.info(f"loading tokenizer for {path}")
     tokenizer = AutoTokenizer.from_pretrained(
         path,
