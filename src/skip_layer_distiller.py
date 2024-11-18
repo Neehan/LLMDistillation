@@ -33,13 +33,13 @@ class SkipLayerDistiller(BaseDistiller):
         # activate student's layer with layer_id and get its outputs
         self.active_layer_list[layer_id] = True
         large_student_model_logits = self.student_model(
-            input_ids=input_ids, mask=attention_mask
+            input_ids, attention_mask
         ).logits
 
         # deactivate the layer and get outputs
         self.active_layer_list[layer_id] = False
         small_student_model_logits = self.student_model(
-            input_ids=input_ids, mask=attention_mask
+            input_ids, attention_mask
         ).logits
 
         # also add final two layers outputs
