@@ -86,7 +86,6 @@ def training_loop(distiller_factory: BaseDistiller, args):
 
         student_model = distiller.train_layer(
             train_encodings,
-            train_seq_len=max_seq_len,
             layer_id=layer_id,
             epochs=num_epochs,
             lr=lr,
