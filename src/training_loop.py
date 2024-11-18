@@ -109,15 +109,10 @@ def training_loop(distiller_factory: BaseDistiller, args):
             logging.info("\nAFTER CALLING GC")
             get_gpu_memory_usage()
 
-        # make current student the new teacher and create a new distiller
-        # teacher_model = student_model
-
-        torch.save(
-            student_model,
+        student_model.save_pretrained(
             DATA_DIR + "llm_cache/model" + f"_student.pth",
         )
 
-    torch.save(
-        student_model,
+    student_model.save_pretrained(
         DATA_DIR + "llm_cache/model" + f"_student.pth",
     )
