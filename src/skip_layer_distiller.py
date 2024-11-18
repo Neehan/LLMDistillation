@@ -34,19 +34,17 @@ class SkipLayerDistiller(BaseDistiller):
         kl_loss_fn = torch.nn.KLDivLoss(reduction="batchmean")
         loss1 = kl_loss_fn(
             F.log_softmax(large_student_model_logits, dim=-1),
-            F.softmax(teacher_model_logits.cuda(), dim=-1),
+            F.softmax(teacher_model_logits, dim=-1),
         )
 
         loss2 = kl_loss_fn(
             F.log_softmax(small_student_model_logits, dim=-1),
-            F.softmax(teacher_model_logits.cuda(), dim=-1),
+            F.softmax(teacher_model_logits, dim=-1),
         )
 
         if TEST_ENV:
             logging.info(f"large student loss: {loss1.item():.3f}")
             logging.info(f"small student loss: {loss2.item():.3f}")
-
-        teacher_model_logits.cpu()
 
         # note that the layer keeps being deactivated after loss computation
         return loss1 + loss2 * 0.01

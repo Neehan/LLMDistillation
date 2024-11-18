@@ -28,8 +28,7 @@ def load_model_and_tokenizer(path):
         trust_remote_code=True,
         cache_dir=DATA_DIR + "llm_cache/",
         attn_implementation="flash_attention_2",
-        device_map="auto",
-    )
+    ).to(DEVICE)
     logging.info(f"loading tokenizer for {path}")
     tokenizer = AutoTokenizer.from_pretrained(
         path,
@@ -45,7 +44,7 @@ def load_coding_dataset(
     batch_size=8,
     max_length=8192,
     buffer_size=5000,
-    num_chunks=4,
+    num_chunks=2,
     force_reload=False,
 ):
     """
