@@ -6,6 +6,9 @@ import gc
 import copy
 from src.base_distiller import BaseDistiller
 from src.utils import load_model_and_tokenizer
+import os
+
+os.makedirs(DATA_DIR + "llm_cache/student_model", exist_ok=True)
 
 
 def get_gpu_memory_usage():
@@ -111,9 +114,9 @@ def training_loop(distiller_factory: BaseDistiller, args):
             get_gpu_memory_usage()
 
         student_model.save_pretrained(
-            DATA_DIR + "llm_cache/model" + f"_student.pth",
+            DATA_DIR + "llm_cache/student_model",
         )
 
     student_model.save_pretrained(
-        DATA_DIR + "llm_cache/model" + f"_student.pth",
+        DATA_DIR + "llm_cache/student_model",
     )
