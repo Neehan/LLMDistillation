@@ -29,7 +29,7 @@ def get_teacher_logits(teacher_model, tokenizer, max_seq_len, batch_size):
             input_ids = batch["input_ids"].to(teacher_model.device)
             attention_mask = batch["attention_mask"].to(teacher_model.device)
 
-            outputs = teacher_model(input_ids, attention_mask=attention_mask)
+            outputs = teacher_model(input_ids, mask=attention_mask)
             logits = outputs.logits
             all_logits.append(logits)
 
