@@ -6,20 +6,8 @@ from src.constants import TEST_ENV
 from src.base_distiller import BaseDistiller
 
 
-class SkippableLayer(nn.Module):
-    def __init__(self, original_layer, active_layer_list, layer_id):
-        super(SkippableLayer, self).__init__()
-        self.original_layer = original_layer
-        self.active_layer_list = active_layer_list
-        self.layer_id = layer_id
-
-    def forward(self, x):
-        is_active: bool = self.active_layer_list[self.layer_id]
-        if is_active:
-            return self.original_layer(x)
-        else:
-            # skip this layer
-            return x
+import torch
+import torch.nn as nn
 
 
 class SkipLayerDistiller(BaseDistiller):
