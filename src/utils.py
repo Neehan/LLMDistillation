@@ -27,6 +27,7 @@ def load_model_and_tokenizer(path):
         torch_dtype=MODEL_PRECISION,
         trust_remote_code=True,
         cache_dir=DATA_DIR + "llm_cache/",
+        attn_implementation="flash_attention_2",
     ).to(DEVICE)
     logging.info(f"loading tokenizer for {path}")
     tokenizer = AutoTokenizer.from_pretrained(
