@@ -65,7 +65,7 @@ class BaseDistiller:
                 with torch.no_grad():
                     teacher_logits_batch = teacher_model(
                         input_ids=input_ids, attention_mask=attention_mask
-                    )
+                    ).logits
 
                 optimizer.zero_grad()
 
