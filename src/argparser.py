@@ -24,19 +24,13 @@ parser.add_argument(
 parser.add_argument(
     "--max_seq_len",
     help="maximum sequence length for training",
-    default=2048,
+    default=8192,
     type=int,
 )
 
 parser.add_argument(
-    "--distill_dim",
-    help="maximum sequence length for training",
-    default=4096,
-    type=int,
-)
-parser.add_argument(
     "--batch_size",
     help="size of the batches for training",
-    default=1,
+    default=8,
     type=int,
 )

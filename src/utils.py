@@ -40,9 +40,10 @@ def load_coding_dataset(
     tokenizer,
     save_path=DATA_DIR + "datasets/github_code/encodings",
     chunk_size=5000,
-    batch_size=1,
-    max_length=2048,
+    batch_size=8,
+    max_length=8192,
     buffer_size=5000,
+    num_chunks=4,
     force_reload=False,
 ):
     """
@@ -62,10 +63,10 @@ def load_coding_dataset(
         tokenize_and_save_dataset(
             tokenizer, save_path, chunk_size, buffer_size, max_length
         )
-    yield from load_encodings_from_files(save_path, batch_size, max_length)
+    yield from load_encodings_from_files(save_path, batch_size, max_length, num_chunks)
 
 
-def load_encodings_from_files(save_path, batch_size, max_length):
+def load_encodings_from_files(save_path, batch_size, max_length, num_chunks):
     """
     Load pretokenized encodings from files in the specified directory.
 
@@ -81,10 +82,12 @@ def load_encodings_from_files(save_path, batch_size, max_length):
         [os.path.join(save_path, f) for f in os.listdir(save_path) if f.endswith(".pt")]
     )
     # skip the first one cause we ppl test on it
-    assert len(encoding_files) > 1, "must tokenize at least 2 chunks"
+    assert (
+        len(encoding_files) > 1 + num_chunks
+    ), f"must tokenize at least {num_chunks} chunks"
     encoding_files = encoding_files[
-        1:2
-    ]  # use one chunk for training during early experiments
+        1 : num_chunks + 1
+    ]  # use the first chunk for ppl computation
     batch_input_ids = []
     batch_attention_mask = []
     for encoding_file in tqdm(
@@ -132,7 +135,7 @@ def tokenize_and_save_dataset(
 
     logging.info("Tokenizing dataset and saving encodings")
     ds = datasets.load_dataset(
-        "codeparrot/github-code",
+        "codeparrot/github-code-clean",
         streaming=True,
         split="train",
         languages=["Python"],
@@ -150,7 +153,7 @@ def tokenize_and_save_dataset(
     logging.info(f"chunk size: {chunk_size}")
 
     for example in tqdm(
-        islice(iter(ds), 20_000), desc="Tokenizing dataset", file=TQDM_OUTPUT
+        islice(iter(ds), 50_000), desc="Tokenizing dataset", file=TQDM_OUTPUT
     ):
         buffer.append(example["code"])
         if len(buffer) == buffer_size:
@@ -217,10 +220,12 @@ def save_encodings_chunk(encodings, save_path, chunk_counter):
     torch.save(encodings, chunk_save_path)
 
 
-def calculate_perplexity(model, tokenizer, stride=512, max_length=2048):
+def calculate_perplexity(
+    model, tokenizer, stride=2048, max_length=4096, full_dataset=True
+):
     # Load the dataset
     ds = datasets.load_dataset(
-        "codeparrot/github-code",
+        "codeparrot/github-code-clean",
         streaming=True,
         split="train",
         languages=["Python"],
@@ -233,18 +238,33 @@ def calculate_perplexity(model, tokenizer, stride=512, max_length=2048):
     )
     # Collect the text data
     texts = []
-    for example in tqdm(
-        islice(iter(ds), 100), desc="Loading dataset", file=TQDM_OUTPUT
-    ):
-        texts.append(example["code"])
+    encodings_ppl_dir = os.path.join(DATA_DIR, "encodings_ppl")
+    os.makedirs(encodings_ppl_dir, exist_ok=True)
+    encodings_ppl_file = os.path.join(encodings_ppl_dir, "encodings.pt")
 
-    encodings = tokenizer("\n\n".join(texts), return_tensors="pt")
-    input_ids = encodings["input_ids"].to(model.device)
+    if os.path.exists(encodings_ppl_file):
+        logging.info(f"Loading encodings from {encodings_ppl_file}")
+        encodings = torch.load(encodings_ppl_file)
+    else:
+        logging.info("Tokenizing dataset and saving encodings...")
+        for example in tqdm(
+            islice(iter(ds), 2000), desc="Loading dataset", file=TQDM_OUTPUT
+        ):
+            texts.append(example["code"])
+
+        encodings = tokenizer("\n\n".join(texts), return_tensors="pt")
+        torch.save(encodings, encodings_ppl_file)
+
+    if not full_dataset:
+        input_ids = encodings["input_ids"][: len(encodings["input_ids"]) // 20].to(
+            model.device
+        )
+    else:
+        input_ids = encodings["input_ids"].to(model.device)
 
     # Set sequence length and compute the number of samples
     seqlen = max_length
     num_tokens = input_ids.size(1)  # Assuming input_ids shape is [1, num_tokens]
-    nsamples = (num_tokens + seqlen - 1) // seqlen  # Ceiling division
 
     # Prepare the model
     model.eval()
