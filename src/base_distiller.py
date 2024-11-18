@@ -28,7 +28,7 @@ class BaseDistiller:
         self,
         train_encodings,
         tokenizer,
-        teacher_logits,
+        teacher_model,
         layer_id,
         epochs,
         lr,
@@ -62,7 +62,11 @@ class BaseDistiller:
                 self.student_model.train()
                 input_ids = batch["input_ids"].to(self.device)
                 attention_mask = batch["attention_mask"].to(self.device)
-                teacher_logits_batch = teacher_logits[batch_idx]
+                with torch.no_grad():
+                    teacher_logits_batch = teacher_model(
+                        input_ids=input_ids, attention_mask=attention_mask
+                    )
+
                 optimizer.zero_grad()
 
                 with autocast(device_type=str(DEVICE), dtype=MODEL_PRECISION):

@@ -21,13 +21,13 @@ class SkipLayerDistiller(BaseDistiller):
         # activate student's layer with layer_id and get its outputs
         self.active_layer_list[layer_id] = True
         large_student_model_logits = self.student_model(
-            input_ids, attention_mask
+            input_ids=input_ids, attention_mask=attention_mask
         ).logits
 
         # deactivate the layer and get outputs
         self.active_layer_list[layer_id] = False
         small_student_model_logits = self.student_model(
-            input_ids, attention_mask
+            input_ids=input_ids, attention_mask=attention_mask
         ).logits
 
         # also add final two layers outputs
@@ -53,7 +53,7 @@ class SkipLayerDistiller(BaseDistiller):
         self,
         train_encodings,
         tokenizer,
-        teacher_logits,
+        teacher_model,
         layer_id,
         epochs,
         lr,
@@ -65,7 +65,7 @@ class SkipLayerDistiller(BaseDistiller):
         return super().train_layer(
             train_encodings,
             tokenizer,
-            teacher_logits,
+            teacher_model,
             layer_id,
             epochs,
             lr,

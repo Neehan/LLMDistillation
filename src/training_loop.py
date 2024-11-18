@@ -3,6 +3,7 @@ import torch
 from src.constants import DATA_DIR, MODEL_PRECISION, TEST_ENV
 from src import utils
 import gc
+import copy
 from src.base_distiller import BaseDistiller
 from src.utils import load_model_and_tokenizer
 
@@ -58,12 +59,12 @@ def training_loop(distiller_factory: BaseDistiller, args):
     logging.info(f"Teacher model's ppl on full dataset: {ppl:.3f}")
 
     # compute teacher logits only once
-    teacher_logits = get_teacher_logits(
-        teacher_model, tokenizer, max_seq_len, batch_size
-    )
+    # teacher_logits = get_teacher_logits(
+    #     teacher_model, tokenizer, max_seq_len, batch_size
+    # )
 
     # now train a student model initialized as teacher
-    student_model = teacher_model
+    student_model = copy.deepcopy(teacher_model)
 
     distiller = distiller_factory(student_model)
 
@@ -87,7 +88,7 @@ def training_loop(distiller_factory: BaseDistiller, args):
         student_model = distiller.train_layer(
             train_encodings,
             tokenizer,
-            teacher_logits,
+            teacher_model,
             layer_id=layer_id,
             epochs=num_epochs,
             lr=lr,
