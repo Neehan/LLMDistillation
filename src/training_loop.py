@@ -65,15 +65,11 @@ def training_loop(distiller_factory: BaseDistiller, args):
     # now train a student model initialized as teacher
     student_model = teacher_model
 
-    distiller = distiller_factory(
-        student_model, tokenizer, teacher_logits=teacher_logits
-    )
+    distiller = distiller_factory(student_model)
 
     # distill every other layer
     for layer_id in range(distiller.num_layers - 2, 0, -2):
-        distiller = distiller_factory(
-            student_model, tokenizer, teacher_logits=teacher_logits
-        )
+        distiller = distiller_factory(student_model)
 
         if TEST_ENV:
             logging.info("\nAFTER LOADING DISTILLER")

@@ -133,7 +133,7 @@ def tokenize_and_save_dataset(
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    logging.info("Tokenizing dataset and saving encodings")
+    logging.info("Tokenizing training dataset and saving encodings")
     ds = datasets.load_dataset(
         "codeparrot/github-code-clean",
         streaming=True,
@@ -244,9 +244,9 @@ def calculate_perplexity(
 
     if os.path.exists(encodings_ppl_file):
         logging.info(f"Loading encodings from {encodings_ppl_file}")
-        encodings = torch.load(encodings_ppl_file)
+        encodings = torch.load(encodings_ppl_file, weights_only=False)
     else:
-        logging.info("Tokenizing dataset and saving encodings...")
+        logging.info("Tokenizing perplexity dataset and saving encodings...")
         for example in tqdm(
             islice(iter(ds), 2000), desc="Loading dataset", file=TQDM_OUTPUT
         ):
