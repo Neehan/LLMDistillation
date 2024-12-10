@@ -1,16 +1,16 @@
 import torch
 import torch.nn as nn
 from torch.amp import autocast
-from tqdm import tqdm
+from tqdm_loggable.auto import tqdm
 import logging
 import os
 import datasets
+from torch.utils.data import IterableDataset
 from src.constants import (
     DATA_DIR,
     DEVICE,
     MODEL_PRECISION,
     MIN_INTERVAL_SEC,
-    TQDM_OUTPUT,
     TEST_ENV,
 )
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -28,7 +28,8 @@ def load_model_and_tokenizer(path):
         trust_remote_code=True,
         cache_dir=DATA_DIR + "llm_cache/",
         attn_implementation="flash_attention_2",
-    ).to(DEVICE)
+        deice_map="auto",
+    )
     logging.info(f"loading tokenizer for {path}")
     tokenizer = AutoTokenizer.from_pretrained(
         path,
@@ -37,85 +38,17 @@ def load_model_and_tokenizer(path):
     return model, tokenizer
 
 
-def load_coding_dataset(
-    tokenizer,
-    save_path=DATA_DIR + "datasets/github_code/encodings",
-    chunk_size=5000,
-    batch_size=8,
-    max_length=8192,
-    buffer_size=5000,
-    num_chunks=2,
-    force_reload=False,
-):
+def save_encodings_chunk(encodings, save_path, chunk_counter):
     """
-    Load coding dataset either from pretokenized files or by tokenizing a new dataset.
+    Save a chunk of encodings to a file.
 
     Args:
-        tokenizer: The tokenizer to use for encoding the dataset.
-        save_path (str): The path to save or load the dataset encodings.
-        chunk_size (int): The size of chunks to save during tokenization.
-        batch_size (int): The number of encodings to yield at once.
-        max_length (int): The maximum length of the tokenized sequences.
-
-    Yields:
-        torch.Tensor: A batch of tokenized input IDs.
+        encodings (list): The list of encodings to save.
+        save_path (str): The path to save the encodings.
+        chunk_counter (int): The current chunk number for naming the file.
     """
-    if not os.path.exists(save_path) or not os.listdir(save_path) or force_reload:
-        tokenize_and_save_dataset(
-            tokenizer, save_path, chunk_size, buffer_size, max_length
-        )
-    yield from load_encodings_from_files(save_path, batch_size, max_length, num_chunks)
-
-
-def load_encodings_from_files(save_path, batch_size, max_length, num_chunks):
-    """
-    Load pretokenized encodings from files in the specified directory.
-
-    Args:
-        save_path (str): The path to the directory containing the encoding files.
-        batch_size (int): The number of encodings to yield at once.
-
-    Yields:
-        dict: A batch of input IDs and attention masks loaded from the encoding files.
-    """
-    logging.info(f"Loading pretokenized encodings from {save_path}")
-    encoding_files = sorted(
-        [os.path.join(save_path, f) for f in os.listdir(save_path) if f.endswith(".pt")]
-    )
-    # skip the first one cause we ppl test on it
-    assert (
-        len(encoding_files) > 1 + num_chunks
-    ), f"must tokenize at least {num_chunks} chunks"
-    encoding_files = encoding_files[
-        1 : num_chunks + 1
-    ]  # use the first chunk for ppl computation
-    batch_input_ids = []
-    batch_attention_mask = []
-    for encoding_file in tqdm(
-        encoding_files, desc="Chunks", file=TQDM_OUTPUT, mininterval=MIN_INTERVAL_SEC
-    ):
-        encodings = torch.load(encoding_file, weights_only=False)
-        for encoding in tqdm(
-            encodings, desc="Training", file=TQDM_OUTPUT, mininterval=MIN_INTERVAL_SEC
-        ):
-            batch_input_ids.append(encoding["input_ids"][:max_length].unsqueeze(0))
-            batch_attention_mask.append(
-                encoding["attention_mask"][:max_length].unsqueeze(0)
-            )
-            if len(batch_input_ids) == batch_size:
-                yield {
-                    "input_ids": torch.cat(batch_input_ids, dim=0),
-                    "attention_mask": torch.cat(batch_attention_mask, dim=0),
-                }
-                batch_input_ids = []
-                batch_attention_mask = []
-                if TEST_ENV:  # only one iteration for testing purposes
-                    break
-    if batch_input_ids:
-        yield {
-            "input_ids": torch.cat(batch_input_ids, dim=0),
-            "attention_mask": torch.cat(batch_attention_mask, dim=0),
-        }
+    chunk_save_path = os.path.join(save_path, f"chunk_{chunk_counter}.pt")
+    torch.save(encodings, chunk_save_path, weights_only=False)
 
 
 def tokenize_and_save_dataset(
@@ -154,7 +87,8 @@ def tokenize_and_save_dataset(
     logging.info(f"chunk size: {chunk_size}")
 
     for example in tqdm(
-        islice(iter(ds), 50_000), desc="Tokenizing dataset", file=TQDM_OUTPUT
+        islice(iter(ds), 30_000),
+        desc="Tokenizing dataset",
     ):
         buffer.append(example["code"])
         if len(buffer) == buffer_size:
@@ -208,17 +142,90 @@ def tokenize_and_save_dataset(
         save_encodings_chunk(encodings, save_path, chunk_counter)
 
 
-def save_encodings_chunk(encodings, save_path, chunk_counter):
+def load_encodings_from_files(encoding_path, batch_size, max_length, num_chunks):
     """
-    Save a chunk of encodings to a file.
+    Yields batches of encodings for training.
+    """
+    logging.info(f"Loading pretokenized encodings from {encoding_path}")
+    encoding_files = sorted(
+        [
+            os.path.join(encoding_path, f)
+            for f in os.listdir(encoding_path)
+            if f.endswith(".pt")
+        ]
+    )
+    assert (
+        len(encoding_files) > 1 + num_chunks
+    ), f"must tokenize at least {num_chunks} chunks"
+    # Skip the first one (used for PPL computation)
+    encoding_files = encoding_files[1 : num_chunks + 1]
 
-    Args:
-        encodings (list): The list of encodings to save.
-        save_path (str): The path to save the encodings.
-        chunk_counter (int): The current chunk number for naming the file.
-    """
-    chunk_save_path = os.path.join(save_path, f"chunk_{chunk_counter}.pt")
-    torch.save(encodings, chunk_save_path)
+    batch_input_ids = []
+    batch_attention_mask = []
+    for encoding_file in tqdm(
+        encoding_files, desc="Chunks", mininterval=MIN_INTERVAL_SEC
+    ):
+        encodings = torch.load(encoding_file, weights_only=False)
+        for encoding in tqdm(encodings, desc="Training", mininterval=MIN_INTERVAL_SEC):
+            batch_input_ids.append(encoding["input_ids"][:max_length].unsqueeze(0))
+            batch_attention_mask.append(
+                encoding["attention_mask"][:max_length].unsqueeze(0)
+            )
+            if len(batch_input_ids) == batch_size:
+                yield {
+                    "input_ids": torch.cat(batch_input_ids, dim=0),
+                    "attention_mask": torch.cat(batch_attention_mask, dim=0),
+                }
+                batch_input_ids = []
+                batch_attention_mask = []
+                if TEST_ENV:
+                    # In test environment, break early
+                    break
+    if batch_input_ids:
+        yield {
+            "input_ids": torch.cat(batch_input_ids, dim=0),
+            "attention_mask": torch.cat(batch_attention_mask, dim=0),
+        }
+
+
+class StreamingEncodingsDataset(IterableDataset):
+    def __init__(
+        self,
+        tokenizer,
+        batch_size,
+        max_length,
+        num_chunks,
+        force_reload=False,
+        save_path=DATA_DIR + "datasets/github_code",
+    ):
+        super().__init__()
+        self.tokenizer = tokenizer
+        self.batch_size = batch_size
+        self.max_length = max_length
+        self.num_chunks = num_chunks
+        self.save_path = save_path
+        self.force_reload = force_reload
+
+    def __iter__(self):
+        encoding_path = self.save_path + "/encodings"
+        if (
+            not os.path.exists(encoding_path)
+            or not os.listdir(encoding_path)
+            or self.force_reload
+        ):
+            # If not already tokenized, do it now
+            # You may need to adjust parameters as needed
+            tokenize_and_save_dataset(
+                self.tokenizer,
+                self.save_path,
+                chunk_size=5000,
+                buffer_size=5000,
+                max_length=self.max_length,
+            )
+        # Stream batches from files
+        return load_encodings_from_files(
+            encoding_path, self.batch_size, self.max_length, self.num_chunks
+        )
 
 
 def calculate_perplexity(
@@ -249,7 +256,8 @@ def calculate_perplexity(
     else:
         logging.info("Tokenizing perplexity dataset and saving encodings...")
         for example in tqdm(
-            islice(iter(ds), 2000), desc="Loading dataset", file=TQDM_OUTPUT
+            islice(iter(ds), 2000),
+            desc="Loading dataset",
         ):
             texts.append(example["code"])
 
@@ -280,7 +288,6 @@ def calculate_perplexity(
     for i in tqdm(
         range(nsamples),
         desc="Perplexity",
-        file=TQDM_OUTPUT,
         mininterval=MIN_INTERVAL_SEC,
     ):
         start_idx = i * stride
