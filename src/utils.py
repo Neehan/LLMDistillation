@@ -48,7 +48,7 @@ def save_encodings_chunk(encodings, save_path, chunk_counter):
         chunk_counter (int): The current chunk number for naming the file.
     """
     chunk_save_path = os.path.join(save_path, f"chunk_{chunk_counter}.pt")
-    torch.save(encodings, chunk_save_path, weights_only=False)
+    torch.save(encodings, chunk_save_path)
 
 
 def tokenize_and_save_dataset(
