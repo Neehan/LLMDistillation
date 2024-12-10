@@ -1,8 +1,40 @@
 #!/bin/bash
-#SBATCH --gres=gpu:volta:1
 
-# Loading the required module
-module load anaconda/Python-ML-2023b
+# Check if conda is already installed
+if ! command -v conda &> /dev/null
+then
+    # Install Miniconda if conda is not found
+    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+    bash Miniconda3-latest-Linux-x86_64.sh -b -p $HOME/miniconda
+    rm Miniconda3-latest-Linux-x86_64.sh
 
-# Run the script
-python src/main.py "$@"
+    # Add Miniconda to PATH
+    export PATH="$HOME/miniconda/bin:$PATH"
+
+    # Initialize conda for bash and zsh
+    conda init bash
+    conda init zsh
+fi
+
+# Create and activate a new environment
+conda create --name llm python=3.12 -y
+
+# Activate the new environment
+conda activate llm
+
+# Install necessary packages
+conda activate llm && conda install pytorch torchvision -c pytorch -y
+conda activate llm && pip install transformers accelerate python-dotenv tqdm-loggable datasets
+
+# Create necessary directories
+mkdir -p data
+mkdir -p data/datasets
+mkdir -p data/llm_cache
+
+# Create .env file
+cat > .env <<EOL
+STDOUT=1
+HALF_PRECISION=1
+TEST_ENV=1
+EOL
+
