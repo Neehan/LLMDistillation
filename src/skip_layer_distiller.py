@@ -57,6 +57,7 @@ class SkipLayerDistiller(BaseDistiller):
         layer_id,
         epochs,
         lr,
+        accelerator,
     ):
         # deactivate the layer
         # from now on, the layer is explicitly activated during loss computation
@@ -69,4 +70,5 @@ class SkipLayerDistiller(BaseDistiller):
             layer_id,
             epochs,
             lr,
+            accelerator,
         )
