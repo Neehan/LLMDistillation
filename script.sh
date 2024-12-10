@@ -12,19 +12,18 @@ then
     export PATH="$HOME/miniconda/bin:$PATH"
 
     # Initialize conda for bash and zsh
-    conda init bash
-    conda init zsh
+    conda init
 fi
 
 # Create and activate a new environment
 conda create --name llm python=3.12 -y
 
 # Activate the new environment
-conda activate llm
+conda init && conda activate llm
 
 # Install necessary packages
 conda activate llm && conda install pytorch torchvision -c pytorch -y
-conda activate llm && pip install transformers accelerate python-dotenv tqdm-loggable datasets
+conda activate llm && pip install transformers accelerate python-dotenv tqdm-loggable datasets flash-attn
 
 # Create necessary directories
 mkdir -p data
