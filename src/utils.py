@@ -217,7 +217,7 @@ class StreamingEncodingsDataset(IterableDataset):
             # You may need to adjust parameters as needed
             tokenize_and_save_dataset(
                 self.tokenizer,
-                self.save_path,
+                encoding_path,
                 chunk_size=5000,
                 buffer_size=5000,
                 max_length=self.max_length,
