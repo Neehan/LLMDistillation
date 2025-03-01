@@ -46,7 +46,20 @@ This approach allows for runtime decisions about which layers to skip, creating 
 
 ## Installation
 
-Run the setup script to install all dependencies:
+### Hugging Face Authentication (Required)
+
+This project uses the Phi-3 model from Microsoft, which requires authentication with Hugging Face. Before running the setup script:
+
+1. Create a Hugging Face account at [huggingface.co](https://huggingface.co)
+2. Generate an access token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
+3. Request access to the Phi-3 model at [huggingface.co/microsoft/Phi-3-mini-128k-instruct](https://huggingface.co/microsoft/Phi-3-mini-128k-instruct)
+4. Add your token to the `.env` file after setup: `HF_TOKEN=your_token_here`
+
+Without a valid token, you won't be able to access the Phi-3 models for training.
+
+### Automated Setup
+
+Run the setup script to install all dependencies and prepare the data:
 
 ```bash
 bash setup.sh
@@ -59,6 +72,9 @@ This will:
 4. Install CUDA if not already installed (Linux only)
 5. Create a conda environment named "llm"
 6. Install all required packages from requirements.txt
+7. Prepare training and test data with visible progress bars
+
+After running the setup script, make sure to add your Hugging Face token to the `.env` file if you haven't already.
 
 ### Manual Installation
 
@@ -74,6 +90,9 @@ conda install pytorch torchvision -c pytorch
 
 # Install other dependencies
 pip install -r requirements.txt
+
+# Prepare the data
+python -m src.setup
 ```
 
 ## Configuration
@@ -83,34 +102,40 @@ The project uses environment variables for configuration, which can be set in th
 - `STDOUT`: Set to 1 to output logs to stdout instead of a file
 - `HAS_CUDA`: Set to 1 if CUDA is available (auto-detected in code)
 - `USE_HALF_PRECISION`: Set to 1 to use half precision (bfloat16/float16) to save memory
-- `TEST_ENV`: Set to 1 to enable test environment with additional logging
-- `HF_TOKEN`: Your Hugging Face authentication token (required for accessing gated models like Phi-3)
+- `TEST_ENV`: Set to 1 to enable test environment with additional logging and smaller dataset
+- `HF_TOKEN`: Your Hugging Face authentication token (required for accessing Phi-3 models)
 
-### Hugging Face Authentication
+## Data Preparation
 
-This project uses the Phi-3 model from Microsoft, which requires authentication with Hugging Face. To access this model:
+The data preparation is automatically handled by the setup script. It:
 
-1. Create a Hugging Face account at [huggingface.co](https://huggingface.co)
-2. Generate an access token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
-3. Request access to the Phi-3 model at [huggingface.co/microsoft/Phi-3-mini-128k-instruct](https://huggingface.co/microsoft/Phi-3-mini-128k-instruct)
-4. Add your token to the `.env` file: `HF_TOKEN=your_token_here`
+1. Downloads the dataset from HuggingFace (codeparrot/github-code-clean)
+2. Tokenizes the data using the Phi-3 tokenizer (or fallback to GPT-2 if no HF token is provided)
+3. Splits the data into training and test sets
+4. Saves the tokenized data in chunks to disk
 
-If you don't provide a token, the setup will fall back to using a public model (GPT-2) for data preparation.
+By default, it prepares:
+- 50,000 training samples in chunks of 5,000 examples each
+- 10,000 test samples
 
-## Usage
+If `TEST_ENV=1` is set in your `.env` file, it will use a smaller dataset:
+- 10,000 training samples in chunks of 2,000 examples each
+- 3,000 test samples
 
-### Data Preparation
-
-After setting up the environment, prepare the data:
+To manually reprocess the data:
 
 ```bash
 conda activate llm
-python -m src.setup
+python -m src.setup --force
 ```
 
-This will download the dataset, tokenize it, and split it into train and test sets.
+You can customize the data preparation with additional arguments:
+- `--train_samples`: Number of training samples (default: 50,000)
+- `--test_samples`: Number of test samples (default: 10,000)
+- `--train_chunk_size`: Size of each training data chunk (default: 5,000)
+- `--max_length`: Maximum sequence length (default: 4,096)
 
-### Training
+## Training
 
 To train the model:
 
@@ -157,7 +182,7 @@ The code includes several memory optimization techniques:
 - Half-precision training (bfloat16 or float16)
 - Garbage collection between layer training
 - Streaming data loading
-- Optional flash attention for CUDA devices
+- Optional flash attention for CUDA devices (automatically enabled when CUDA is available)
 
 ## License
 
