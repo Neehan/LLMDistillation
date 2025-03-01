@@ -12,6 +12,7 @@ from src.constants import (
     MODEL_PRECISION,
     MIN_INTERVAL_SEC,
     TEST_ENV,
+    HAS_CUDA,
 )
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from itertools import islice
@@ -19,21 +20,45 @@ from itertools import islice
 
 def load_model_and_tokenizer(path):
     """
-    load models locally because the supercloud doesn't support locking
+    Load models locally because the supercloud doesn't support locking
     """
     logging.info(f"loading model from {path}")
-    model = AutoModelForCausalLM.from_pretrained(
-        path,
-        torch_dtype=MODEL_PRECISION,
-        trust_remote_code=True,
-        cache_dir=DATA_DIR + "llm_cache/",
-        attn_implementation="flash_attention_2",
-        device_map="auto",
-    )
+    model_kwargs = {
+        "torch_dtype": MODEL_PRECISION,
+        "trust_remote_code": True,
+        "cache_dir": DATA_DIR + "llm_cache/",
+        "device_map": "auto",
+    }
+
+    # Get HF token from environment variables
+    hf_token = os.getenv("HF_TOKEN", None)
+    if hf_token:
+        logging.info("Using Hugging Face authentication token")
+        model_kwargs["token"] = hf_token
+
+    # Only use flash attention if explicitly installed
+    try:
+        import flash_attn
+
+        model_kwargs["attn_implementation"] = "flash_attention_2"
+        logging.info("Using flash attention for faster inference")
+    except ImportError:
+        logging.info("Flash attention not available, using default attention")
+
+    model = AutoModelForCausalLM.from_pretrained(path, **model_kwargs)
     logging.info(f"loading tokenizer for {path}")
+
+    tokenizer_kwargs = {
+        "trust_remote_code": True,
+    }
+
+    # Add token to tokenizer if available
+    if hf_token:
+        tokenizer_kwargs["token"] = hf_token
+
     tokenizer = AutoTokenizer.from_pretrained(
         path,
-        trust_remote_code=True,  # cache_dir=DATA_DIR + "llm_cache/"
+        **tokenizer_kwargs,
     )
     return model, tokenizer
 
@@ -154,11 +179,16 @@ def load_encodings_from_files(encoding_path, batch_size, max_length, num_chunks)
             if f.endswith(".pt")
         ]
     )
-    assert (
-        len(encoding_files) > 1 + num_chunks
-    ), f"must tokenize at least {num_chunks} chunks"
-    # Skip the first one (used for PPL computation)
-    encoding_files = encoding_files[1 : num_chunks + 1]
+
+    # Ensure we have enough chunks
+    if len(encoding_files) < num_chunks:
+        logging.warning(
+            f"Requested {num_chunks} chunks but only found {len(encoding_files)}."
+        )
+        num_chunks = len(encoding_files)
+
+    # Use the first num_chunks files
+    encoding_files = encoding_files[:num_chunks]
 
     batch_input_ids = []
     batch_attention_mask = []
@@ -188,92 +218,70 @@ def load_encodings_from_files(encoding_path, batch_size, max_length, num_chunks)
         }
 
 
-class StreamingEncodingsDataset(IterableDataset):
+class StreamingTrainDataset(IterableDataset):
     def __init__(
         self,
-        tokenizer,
         batch_size,
         max_length,
         num_chunks,
-        force_reload=False,
-        save_path=DATA_DIR + "datasets/github_code",
+        encoding_dir=os.path.join(DATA_DIR, "encodings_train"),
     ):
         super().__init__()
-        self.tokenizer = tokenizer
         self.batch_size = batch_size
         self.max_length = max_length
         self.num_chunks = num_chunks
-        self.save_path = save_path
-        self.force_reload = force_reload
+        self.encoding_dir = encoding_dir
 
     def __iter__(self):
-        encoding_path = self.save_path + "/encodings"
-        if (
-            not os.path.exists(encoding_path)
-            or not os.listdir(encoding_path)
-            or self.force_reload
-        ):
-            # If not already tokenized, do it now
-            # You may need to adjust parameters as needed
-            tokenize_and_save_dataset(
-                self.tokenizer,
-                encoding_path,
-                chunk_size=5000,
-                buffer_size=5000,
-                max_length=self.max_length,
-            )
         # Stream batches from files
         return load_encodings_from_files(
-            encoding_path, self.batch_size, self.max_length, self.num_chunks
+            self.encoding_dir, self.batch_size, self.max_length, self.num_chunks
         )
 
 
 def calculate_perplexity(
     model, tokenizer, stride=2048, max_length=4096, full_dataset=True
 ):
-    # Load the dataset
-    ds = datasets.load_dataset(
-        "codeparrot/github-code-clean",
-        streaming=True,
-        split="train",
-        languages=["Python"],
-        filter_languages=True,
-        filter_licenses=True,
-        licenses=["mit", "isc"],
-        trust_remote_code=True,
-        # Ensure DATA_DIR is defined or replace it with the desired cache directory
-        cache_dir=DATA_DIR + "datasets/",
-    )
-    # Collect the text data
-    texts = []
-    encodings_ppl_dir = os.path.join(DATA_DIR, "encodings_ppl")
-    os.makedirs(encodings_ppl_dir, exist_ok=True)
-    encodings_ppl_file = os.path.join(encodings_ppl_dir, "encodings.pt")
+    """
+    Calculate perplexity using the test dataset.
 
-    if os.path.exists(encodings_ppl_file):
-        logging.info(f"Loading encodings from {encodings_ppl_file}")
-        encodings = torch.load(encodings_ppl_file, weights_only=False)
-    else:
-        logging.info("Tokenizing perplexity dataset and saving encodings...")
-        for example in tqdm(
-            islice(iter(ds), 2000),
-            desc="Loading dataset",
-        ):
-            texts.append(example["code"])
+    Args:
+        model: The model to evaluate
+        tokenizer: The tokenizer to use
+        stride: Stride for sliding window evaluation
+        max_length: Maximum sequence length
+        full_dataset: Whether to use the full test dataset or a subset
 
-        encodings = tokenizer("\n\n".join(texts), return_tensors="pt")
-        torch.save(encodings, encodings_ppl_file)
+    Returns:
+        Perplexity score
+    """
+    # Load the test encodings
+    test_dir = os.path.join(DATA_DIR, "encodings_test")
+    test_files = sorted([f for f in os.listdir(test_dir) if f.endswith(".pt")])
+
+    if not test_files:
+        logging.error("No test files found. Please run setup.py first.")
+        return float("inf")
+
+    # Load the first test file
+    test_file = os.path.join(test_dir, test_files[0])
+    logging.info(f"Loading test data from {test_file}")
+    encodings = torch.load(test_file, weights_only=False)
+
+    # Concatenate all input_ids
+    all_input_ids = []
+    for encoding in encodings:
+        all_input_ids.extend(encoding["input_ids"].tolist())
+
+    input_ids = torch.tensor([all_input_ids], device=model.device)
 
     if not full_dataset:
-        input_ids = encodings["input_ids"][
-            :, : encodings["input_ids"].shape[1] // 20
-        ].to(model.device)
-    else:
-        input_ids = encodings["input_ids"].to(model.device)
+        # Use only a small portion for quick evaluation
+        input_ids = input_ids[:, : input_ids.shape[1] // 20]
 
     # Set sequence length and compute the number of samples
     seqlen = max_length
-    num_tokens = input_ids.size(1)  # Assuming input_ids shape is [1, num_tokens]
+    num_tokens = input_ids.size(1)
 
     # Prepare the model
     model.eval()
